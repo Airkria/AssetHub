@@ -11,7 +11,7 @@ import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { TagEditor } from "@/components/TagEditor"
 import { useLibrary } from "@/store/LibraryContext"
-import { api, assetUrl } from "@/api"
+import { api } from "@/api"
 import { inFolder } from "@/lib/path"
 import { cn } from "@/lib/utils"
 import { useThumbSize } from "@/hooks/useThumbSize"
@@ -272,8 +272,8 @@ function AssetDetail({
     <div className="space-y-3">
       <div className="text-sm font-semibold">资产详情</div>
       {currentImg ? (
-        <img
-          src={assetUrl(currentImg)}
+        <Thumbnail
+          path={currentImg}
           alt={asset.name}
           className="aspect-video w-full cursor-zoom-in rounded-lg object-cover"
           onClick={() => setZoomed(true)}
@@ -290,9 +290,9 @@ function AssetDetail({
       {previews.length > 1 && (
         <div className="flex gap-1 overflow-x-auto pb-1">
           {previews.map((p, i) => (
-            <img
+            <Thumbnail
               key={p}
-              src={assetUrl(p)}
+              path={p}
               alt={`${asset.name} 预览 ${i + 1}`}
               onClick={() => setImgIdx(i)}
               className={cn(
@@ -334,7 +334,7 @@ function AssetDetail({
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-8"
           onClick={() => setZoomed(false)}
         >
-          <img src={assetUrl(currentImg)} alt={asset.name} className="max-h-full max-w-full object-contain" />
+          <Thumbnail path={currentImg} alt={asset.name} className="max-h-full max-w-full object-contain" />
         </div>
       )}
     </div>

@@ -8,7 +8,6 @@ import { Thumbnail } from "@/components/Thumbnail"
 import { Card } from "@/components/ui/card"
 import { TagEditor } from "@/components/TagEditor"
 import { useLibrary } from "@/store/LibraryContext"
-import { assetUrl } from "@/api"
 import { inFolder } from "@/lib/path"
 import { cn } from "@/lib/utils"
 import { useThumbSize } from "@/hooks/useThumbSize"
@@ -213,8 +212,8 @@ function ArtDetail({
       </div>
 
       {img ? (
-        <img
-          src={assetUrl(img)}
+        <Thumbnail
+          path={img}
           alt={asset.name}
           className="aspect-video w-full cursor-zoom-in rounded-lg object-cover"
           onClick={() => setZoomed(true)}
@@ -257,7 +256,7 @@ function ArtDetail({
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-8"
           onClick={() => setZoomed(false)}
         >
-          <img src={assetUrl(img)} alt={asset.name} className="max-h-full max-w-full object-contain" />
+          <Thumbnail path={img} alt={asset.name} className="max-h-full max-w-full object-contain" />
         </div>
       )}
     </div>

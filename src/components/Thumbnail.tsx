@@ -2,15 +2,17 @@ import { useEffect, useState } from "react"
 import { api, assetUrl } from "@/api"
 import { cn } from "@/lib/utils"
 
-// 懒加载缩略图：优先用本地缓存的缩略图（快），生成失败则回退原图
+// 懒加载缩略图：优先用本地缓存的缩略图（快，且能解 TGA/EXR/HDR/DDS），生成失败回退原图
 export function Thumbnail({
   path,
   className,
   alt,
+  onClick,
 }: {
   path: string
   className?: string
   alt?: string
+  onClick?: () => void
 }) {
   const [src, setSrc] = useState<string | null>(null)
 
@@ -31,7 +33,7 @@ export function Thumbnail({
   }, [path])
 
   if (!src) {
-    return <div className={cn("animate-pulse bg-muted", className)} />
+    return <div className={cn("animate-pulse bg-muted", className)} onClick={onClick} />
   }
-  return <img src={src} alt={alt} className={className} />
+  return <img src={src} alt={alt} className={className} onClick={onClick} />
 }
