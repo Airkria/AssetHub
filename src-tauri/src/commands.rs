@@ -415,6 +415,21 @@ pub fn get_thumbnail(state: State<AppState>, path: String) -> Result<String, Str
     }
 }
 
+/// 清除所有缩略图缓存
+#[tauri::command]
+pub fn clear_cache(state: State<AppState>) -> Result<(), String> {
+    let cfg = state.config.lock().unwrap().clone();
+    let cache_dir = if cfg.cache_dir.trim().is_empty() {
+        state.app_data_dir.join("thumbnails")
+    } else {
+        PathBuf::from(&cfg.cache_dir)
+    };
+    if cache_dir.exists() {
+        std::fs::remove_dir_all(&cache_dir).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 /// 缓存超出上限时按最旧（mtime）优先清理
 fn cleanup_cache(cache_dir: &Path, max_bytes: u64) {
     let Ok(entries) = std::fs::read_dir(cache_dir) else {

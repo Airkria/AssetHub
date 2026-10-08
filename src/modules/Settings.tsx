@@ -191,6 +191,12 @@ function PathsSection() {
     await addLibrary(deriveName(path), path)
   }
 
+  const clearCache = async () => {
+    const ok = await askConfirm("确定要清除所有缩略图缓存吗？下次预览会重新生成。", "清除缓存")
+    if (!ok) return
+    await api.clearCache()
+  }
+
   return (
     <div className="space-y-4">
       <Card className="max-w-2xl">
@@ -261,6 +267,12 @@ function PathsSection() {
             留空用默认位置；缓存超 5GB 自动清理最旧的缩略图
           </p>
         </CardContent>
+        <CardFooter className="justify-end">
+          <Button variant="destructive" size="sm" onClick={clearCache}>
+            <Trash2 className="h-4 w-4" />
+            清除缓存
+          </Button>
+        </CardFooter>
       </Card>
     </div>
   )
