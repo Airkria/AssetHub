@@ -23,6 +23,7 @@ const defaultConfig: Config = {
   },
   art_folder: "",
   tools_folder: "",
+  cache_dir: "",
 }
 
 export type ConnStatus = "none" | "connected" | "error"

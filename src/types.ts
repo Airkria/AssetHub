@@ -37,6 +37,7 @@ export interface Config {
   match_rules: MatchRules
   art_folder: string
   tools_folder: string
+  cache_dir: string
 }
 
 export interface Asset {

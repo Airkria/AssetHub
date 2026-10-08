@@ -148,6 +148,9 @@ pub struct Config {
     /// 工具文件夹（相对库根）
     #[serde(default)]
     pub tools_folder: String,
+    /// 缩略图缓存位置（空 = 用默认应用数据目录）
+    #[serde(default)]
+    pub cache_dir: String,
 }
 
 impl Default for Config {
@@ -158,6 +161,7 @@ impl Default for Config {
             match_rules: MatchRules::default(),
             art_folder: String::new(),
             tools_folder: String::new(),
+            cache_dir: String::new(),
         }
     }
 }

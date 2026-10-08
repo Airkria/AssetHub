@@ -265,6 +265,26 @@ function PathsSection() {
           />
         </CardContent>
       </Card>
+
+      <Card className="max-w-2xl">
+        <CardHeader>
+          <CardTitle>缓存</CardTitle>
+          <CardDescription>
+            缩略图缓存位置（建议放 SSD，默认在 C 盘应用数据目录）
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <FolderRow
+            label="缓存位置"
+            value={config.cache_dir}
+            onPick={(p) => setConfig({ ...config, cache_dir: p })}
+            onClear={() => setConfig({ ...config, cache_dir: "" })}
+          />
+          <p className="text-xs text-muted-foreground">
+            留空用默认位置；缓存超 5GB 自动清理最旧的缩略图
+          </p>
+        </CardContent>
+      </Card>
     </div>
   )
 }
