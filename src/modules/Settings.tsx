@@ -21,6 +21,7 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
@@ -42,10 +43,8 @@ function deriveName(path: string) {
   return seg || "资源库"
 }
 
-// 匹配规则表单（字符串形式，避免输入时解析导致光标跳动）
+// 全局匹配规则表单（分类 / 预览格式 / 预览后缀，不随库变）
 interface RulesForm {
-  include: string
-  exclude: string
   suffixes: string
   categoryRules: { name: string; extensions: string }[]
   formatFamilies: { key: string; label: string; extensions: string }[]
@@ -53,8 +52,6 @@ interface RulesForm {
 
 function formToMatchRules(form: RulesForm): MatchRules {
   return {
-    include_dirs: form.include.split("\n").map((s) => s.trim()).filter(Boolean),
-    exclude_dirs: form.exclude.split("\n").map((s) => s.trim()).filter(Boolean),
     preview_suffixes: form.suffixes.split(",").map((s) => s.trim()).filter(Boolean),
     category_rules: form.categoryRules.map((r) => ({
       name: r.name.trim(),
@@ -70,8 +67,6 @@ function formToMatchRules(form: RulesForm): MatchRules {
 
 function matchRulesToForm(rules: MatchRules): RulesForm {
   return {
-    include: rules.include_dirs.join("\n"),
-    exclude: rules.exclude_dirs.join("\n"),
     suffixes: rules.preview_suffixes.join(","),
     categoryRules: rules.category_rules.map((r) => ({
       name: r.name,
@@ -98,6 +93,12 @@ export function Settings() {
   const { config, setConfig } = useLibrary()
   const [form, setForm] = useState<RulesForm>(() => matchRulesToForm(config.match_rules))
   const [active, setActive] = useState<SectionKey>("paths")
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const pathsRef = useRef<HTMLElement | null>(null)
+  const rulesRef = useRef<HTMLElement | null>(null)
+  const formatsRef = useRef<HTMLElement | null>(null)
+  const configRef = useRef<HTMLElement | null>(null)
+  const refs = { paths: pathsRef, rules: rulesRef, formats: formatsRef, config: configRef }
 
   // 配置从外部变化（选库加载配置等）时，重新同步表单
   useEffect(() => {
@@ -106,17 +107,6 @@ export function Settings() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.match_rules])
-  const scrollRef = useRef<HTMLDivElement | null>(null)
-  const pathsRef = useRef<HTMLElement | null>(null)
-  const rulesRef = useRef<HTMLElement | null>(null)
-  const formatsRef = useRef<HTMLElement | null>(null)
-  const configRef = useRef<HTMLElement | null>(null)
-  const refs = {
-    paths: pathsRef,
-    rules: rulesRef,
-    formats: formatsRef,
-    config: configRef,
-  }
 
   const onScroll = () => {
     const c = scrollRef.current
@@ -156,11 +146,7 @@ export function Settings() {
             ))}
           </nav>
         </aside>
-        <div
-          ref={scrollRef}
-          onScroll={onScroll}
-          className="flex-1 overflow-y-auto p-6"
-        >
+        <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto p-6">
           <div className="space-y-6">
             <section ref={pathsRef} className="scroll-mt-6">
               <PathsSection />
@@ -172,12 +158,7 @@ export function Settings() {
               <FormatsSection form={form} setForm={setForm} />
             </section>
             <section ref={configRef} className="scroll-mt-6">
-              <ConfigFileSection
-                form={form}
-                setForm={setForm}
-                config={config}
-                setConfig={setConfig}
-              />
+              <ConfigFileSection form={form} setForm={setForm} config={config} setConfig={setConfig} />
             </section>
             <section>
               <IndexSection />
@@ -190,7 +171,8 @@ export function Settings() {
 }
 
 function PathsSection() {
-  const { libraries, addLibrary, removeLibrary, config, setConfig } = useLibrary()
+  const { libraries, activeLibrary, addLibrary, removeLibrary, config, setConfig, updateActiveLibrary } =
+    useLibrary()
 
   const addViaPicker = async () => {
     const path = await pickFolder()
@@ -202,9 +184,7 @@ function PathsSection() {
         "发现配置文件",
       )
       if (use) {
-        const loaded = await api.loadRulesFile(
-          `${path.replace(/[\\/]+$/, "")}\\${files[0]}`,
-        )
+        const loaded = await api.loadRulesFile(`${path.replace(/[\\/]+$/, "")}\\${files[0]}`)
         await setConfig({ ...config, match_rules: loaded })
       }
     }
@@ -216,9 +196,7 @@ function PathsSection() {
       <Card className="max-w-2xl">
         <CardHeader>
           <CardTitle>资源库路径</CardTitle>
-          <CardDescription>
-            可添加多个 NAS 路径，每个作为独立资源库切换查看
-          </CardDescription>
+          <CardDescription>可添加多个 NAS 路径，每个作为独立资源库切换查看</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
           {libraries.length === 0 && (
@@ -227,21 +205,12 @@ function PathsSection() {
             </p>
           )}
           {libraries.map((lib) => (
-            <div
-              key={lib.id}
-              className="flex items-center gap-2 rounded-md border p-2"
-            >
+            <div key={lib.id} className="flex items-center gap-2 rounded-md border p-2">
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium">{lib.name}</div>
-                <div className="truncate text-xs text-muted-foreground">
-                  {lib.path}
-                </div>
+                <div className="truncate text-xs text-muted-foreground">{lib.path}</div>
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => removeLibrary(lib.id)}
-              >
+              <Button variant="ghost" size="icon" onClick={() => removeLibrary(lib.id)}>
                 <Trash2 className="h-4 w-4" />
               </Button>
             </div>
@@ -253,23 +222,25 @@ function PathsSection() {
         </CardContent>
       </Card>
 
+      <ScanScopeCard key={activeLibrary?.id ?? "none"} />
+
       <Card className="max-w-2xl">
         <CardHeader>
           <CardTitle>板块划分</CardTitle>
-          <CardDescription>美术设定与工具板块对应的工作文件夹</CardDescription>
+          <CardDescription>当前资源库的美术设定 / 工具板块对应文件夹（每库独立）</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <FolderRow
             label="美术设定文件夹"
-            value={config.art_folder}
-            onPick={(p) => setConfig({ ...config, art_folder: p })}
-            onClear={() => setConfig({ ...config, art_folder: "" })}
+            value={activeLibrary?.art_folder ?? ""}
+            onPick={(p) => updateActiveLibrary({ art_folder: p })}
+            onClear={() => updateActiveLibrary({ art_folder: "" })}
           />
           <FolderRow
             label="工具文件夹"
-            value={config.tools_folder}
-            onPick={(p) => setConfig({ ...config, tools_folder: p })}
-            onClear={() => setConfig({ ...config, tools_folder: "" })}
+            value={activeLibrary?.tools_folder ?? ""}
+            onPick={(p) => updateActiveLibrary({ tools_folder: p })}
+            onClear={() => updateActiveLibrary({ tools_folder: "" })}
           />
         </CardContent>
       </Card>
@@ -277,9 +248,7 @@ function PathsSection() {
       <Card className="max-w-2xl">
         <CardHeader>
           <CardTitle>缓存</CardTitle>
-          <CardDescription>
-            缩略图缓存位置（建议放 SSD，默认在 C 盘应用数据目录）
-          </CardDescription>
+          <CardDescription>缩略图缓存位置（建议放 SSD，默认在 C 盘应用数据目录）</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <FolderRow
@@ -294,6 +263,61 @@ function PathsSection() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+function ScanScopeCard() {
+  const { activeLibrary, updateActiveLibrary } = useLibrary()
+  const [include, setInclude] = useState(activeLibrary?.include_dirs.join("\n") ?? "")
+  const [exclude, setExclude] = useState(activeLibrary?.exclude_dirs.join("\n") ?? "")
+
+  const save = async () => {
+    if (!activeLibrary) return
+    await updateActiveLibrary({
+      include_dirs: include.split("\n").map((s) => s.trim()).filter(Boolean),
+      exclude_dirs: exclude.split("\n").map((s) => s.trim()).filter(Boolean),
+    })
+  }
+
+  return (
+    <Card className="max-w-2xl">
+      <CardHeader>
+        <CardTitle>扫描范围</CardTitle>
+        <CardDescription>当前资源库的扫描范围（每库独立，切换库时跟着变）</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div>
+          <label className="mb-1 block text-sm text-muted-foreground">
+            限制搜索的文件夹（相对库根，一行一个，留空 = 扫描全部）
+          </label>
+          <textarea
+            className={textareaClass}
+            rows={3}
+            value={include}
+            onChange={(e) => setInclude(e.target.value)}
+            placeholder={"02_资产库\\Library\n03_工具库\\Tools"}
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm text-muted-foreground">
+            排除的文件夹（相对库根，一行一个）
+          </label>
+          <textarea
+            className={textareaClass}
+            rows={2}
+            value={exclude}
+            onChange={(e) => setExclude(e.target.value)}
+            placeholder={"99_归档"}
+          />
+        </div>
+      </CardContent>
+      <CardFooter>
+        <Button onClick={save}>
+          <Save className="h-4 w-4" />
+          保存扫描范围
+        </Button>
+      </CardFooter>
+    </Card>
   )
 }
 
@@ -347,50 +371,8 @@ function RulesSection({
     <div className="space-y-4">
       <Card className="max-w-2xl">
         <CardHeader>
-          <CardTitle>扫描范围</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <label className="mb-1 block text-sm text-muted-foreground">
-              限制搜索的文件夹（相对库根，一行一个，留空 = 扫描全部）
-            </label>
-            <textarea
-              className={textareaClass}
-              rows={3}
-              value={form.include}
-              onChange={(e) => setForm((f) => ({ ...f, include: e.target.value }))}
-              placeholder={"02_资产库\\Library\n03_工具库\\Tools"}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm text-muted-foreground">
-              排除的文件夹（相对库根，一行一个）
-            </label>
-            <textarea
-              className={textareaClass}
-              rows={2}
-              value={form.exclude}
-              onChange={(e) => setForm((f) => ({ ...f, exclude: e.target.value }))}
-              placeholder={"99_归档"}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm text-muted-foreground">
-              预览图后缀（逗号分隔，用于包体 ↔ 预览图匹配）
-            </label>
-            <Input
-              value={form.suffixes}
-              onChange={(e) => setForm((f) => ({ ...f, suffixes: e.target.value }))}
-              placeholder="_preview,_thumb"
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="max-w-2xl">
-        <CardHeader>
           <CardTitle>分类规则</CardTitle>
-          <CardDescription>按扩展名归类资产（优先于目录名分类）</CardDescription>
+          <CardDescription>按扩展名归类资产（优先于目录名分类，全局共享）</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
           {form.categoryRules.map((r, i) => (
@@ -435,6 +417,20 @@ function RulesSection({
           </Button>
         </CardContent>
       </Card>
+
+      <Card className="max-w-2xl">
+        <CardHeader>
+          <CardTitle>预览图后缀</CardTitle>
+          <CardDescription>用于包体 ↔ 预览图匹配（全局共享）</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Input
+            value={form.suffixes}
+            onChange={(e) => setForm((f) => ({ ...f, suffixes: e.target.value }))}
+            placeholder="_preview,_thumb"
+          />
+        </CardContent>
+      </Card>
     </div>
   )
 }
@@ -450,7 +446,7 @@ function FormatsSection({
     <Card className="max-w-2xl">
       <CardHeader>
         <CardTitle>预览文件格式</CardTitle>
-        <CardDescription>按格式家族管理可索引/预览的扩展名白名单</CardDescription>
+        <CardDescription>按格式家族管理可索引/预览的扩展名白名单（全局共享）</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {form.formatFamilies.map((f, i) => (
@@ -495,8 +491,7 @@ function ConfigFileSection({
   const [currentConfig, setCurrentConfig] = useState("")
   const [baseForm, setBaseForm] = useState<RulesForm | null>(null)
 
-  const dirty =
-    baseForm !== null && JSON.stringify(form) !== JSON.stringify(baseForm)
+  const dirty = baseForm !== null && JSON.stringify(form) !== JSON.stringify(baseForm)
 
   const saveConfigFile = async () => {
     const name = rulesName.trim()
@@ -535,7 +530,7 @@ function ConfigFileSection({
       <CardHeader>
         <CardTitle>配置文件</CardTitle>
         <CardDescription>
-          匹配规则统一保存在配置文件（public_ 全局 / personal_ 个人），可分享给团队
+          全局匹配规则（分类 / 预览格式 / 预览后缀）保存为可分享的配置文件
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -547,9 +542,7 @@ function ConfigFileSection({
         </div>
         <Separator />
         <div>
-          <label className="mb-1 block text-sm text-muted-foreground">
-            保存当前匹配规则到文件
-          </label>
+          <label className="mb-1 block text-sm text-muted-foreground">保存全局规则到文件</label>
           <div className="flex gap-2">
             <select
               value={kind}
@@ -583,13 +576,9 @@ function ConfigFileSection({
             )}
           </div>
         </div>
-
         <Separator />
-
         <div>
-          <label className="mb-1 block text-sm text-muted-foreground">
-            从文件加载匹配规则
-          </label>
+          <label className="mb-1 block text-sm text-muted-foreground">从文件加载全局规则</label>
           <Button size="sm" variant="outline" onClick={loadConfigFile}>
             <FolderOpen className="h-4 w-4" />
             加载配置文件
@@ -617,22 +606,14 @@ function IndexSection() {
               <span className={paused ? "text-muted-foreground" : ""}>
                 {paused ? "已暂停" : "扫描中..."}
               </span>
-              <span className="text-muted-foreground">
-                已扫描 {progress.scanned} 个文件
-              </span>
+              <span className="text-muted-foreground">已扫描 {progress.scanned} 个文件</span>
             </div>
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
               <div className="h-full w-2/3 animate-pulse rounded-full bg-primary" />
             </div>
-            <div className="truncate text-xs text-muted-foreground">
-              {progress.currentDir}
-            </div>
+            <div className="truncate text-xs text-muted-foreground">{progress.currentDir}</div>
             <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={paused ? resumeScan : pauseScan}
-              >
+              <Button size="sm" variant="outline" onClick={paused ? resumeScan : pauseScan}>
                 {paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
                 {paused ? "继续" : "暂停"}
               </Button>
@@ -649,9 +630,7 @@ function IndexSection() {
           </Button>
         )}
         {error && <p className="text-sm text-destructive">{error}</p>}
-        <p className="text-xs text-muted-foreground">
-          当前库已索引 {assets.length} 个文件
-        </p>
+        <p className="text-xs text-muted-foreground">当前库已索引 {assets.length} 个文件</p>
       </CardContent>
     </Card>
   )

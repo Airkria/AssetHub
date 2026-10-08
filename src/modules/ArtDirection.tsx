@@ -16,7 +16,8 @@ import type { Asset } from "@/types"
 const DISPLAYABLE = new Set(["png", "jpg", "jpeg", "webp", "bmp", "gif"])
 
 export function ArtDirection() {
-  const { assets, config, updateMetadata, renameAsset } = useLibrary()
+  const { assets, activeLibrary, updateMetadata, renameAsset } = useLibrary()
+  const artFolder = activeLibrary?.art_folder ?? ""
   const { cols, setCols, onWheel } = useThumbSize(3)
   const [query, setQuery] = useState("")
   const [currentId, setCurrentId] = useState<string | null>(null)
@@ -25,10 +26,10 @@ export function ArtDirection() {
   const artAssets = useMemo(() => {
     return assets.filter((a) => {
       if (a.is_preview) return false
-      if (config.art_folder) return inFolder(a.path, config.art_folder)
+      if (artFolder) return inFolder(a.path, artFolder)
       return DISPLAYABLE.has(a.ext)
     })
-  }, [assets, config.art_folder])
+  }, [assets, artFolder])
 
   const suggested = useMemo(() => {
     const s = new Set<string>()
@@ -97,7 +98,7 @@ export function ArtDirection() {
             <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
               <p>暂无美术参考</p>
               <p className="mt-1 text-xs">
-                {config.art_folder
+                {artFolder
                   ? "请在该文件夹放入参考图后重新扫描"
                   : "未配置美术设定文件夹（设置 → 路径设置）"}
               </p>

@@ -18,12 +18,13 @@ import { inFolder } from "@/lib/path"
 import type { Asset } from "@/types"
 
 export function Tools() {
-  const { assets, config, updateMetadata, renameAsset, deleteAsset } = useLibrary()
+  const { assets, activeLibrary, updateMetadata, renameAsset, deleteAsset } = useLibrary()
+  const toolsFolder = activeLibrary?.tools_folder ?? ""
   const [query, setQuery] = useState("")
 
   const toolAssets = useMemo(() => {
-    return assets.filter((a) => !a.is_preview && inFolder(a.path, config.tools_folder))
-  }, [assets, config.tools_folder])
+    return assets.filter((a) => !a.is_preview && inFolder(a.path, toolsFolder))
+  }, [assets, toolsFolder])
 
   const filtered = useMemo(() => {
     if (!query) return toolAssets
@@ -50,7 +51,7 @@ export function Tools() {
           <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
             <p>暂无工具</p>
             <p className="mt-1 text-xs">
-              {config.tools_folder
+              {toolsFolder
                 ? "请把 exe / 安装包放入工具文件夹后重新扫描"
                 : "未配置工具文件夹（设置 → 路径设置）"}
             </p>

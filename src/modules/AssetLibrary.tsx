@@ -33,7 +33,9 @@ function fallbackGradient(id: string) {
 }
 
 export function AssetLibrary() {
-  const { assets, config, updateMetadata } = useLibrary()
+  const { assets, activeLibrary, updateMetadata } = useLibrary()
+  const artFolder = activeLibrary?.art_folder ?? ""
+  const toolsFolder = activeLibrary?.tools_folder ?? ""
   const { cols, setCols, onWheel } = useThumbSize(3)
   const [mode, setMode] = useState<"category" | "tag">("category")
   const [category, setCategory] = useState("全部")
@@ -46,11 +48,11 @@ export function AssetLibrary() {
     () =>
       assets.filter((a) => {
         if (a.is_preview) return false
-        if (config.art_folder && inFolder(a.path, config.art_folder)) return false
-        if (config.tools_folder && inFolder(a.path, config.tools_folder)) return false
+        if (artFolder && inFolder(a.path, artFolder)) return false
+        if (toolsFolder && inFolder(a.path, toolsFolder)) return false
         return true
       }),
-    [assets, config.art_folder, config.tools_folder],
+    [assets, artFolder, toolsFolder],
   )
 
   const categories = useMemo(() => {

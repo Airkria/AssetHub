@@ -67,6 +67,10 @@ pub fn add_library(state: State<AppState>, name: String, path: String) -> Result
         id: id.clone(),
         name,
         path,
+        include_dirs: vec![],
+        exclude_dirs: vec![],
+        art_folder: String::new(),
+        tools_folder: String::new(),
     };
     cfg.libraries.push(lib.clone());
     if cfg.active_library_id.is_none() {
@@ -118,8 +122,8 @@ pub fn start_scan(app: AppHandle, state: State<AppState>, lib_id: String) -> Res
     }
 
     let rules = cfg.match_rules.clone();
-    let art_rel = to_rel(&root, &cfg.art_folder);
-    let tools_rel = to_rel(&root, &cfg.tools_folder);
+    let art_rel = to_rel(&root, &lib.art_folder);
+    let tools_rel = to_rel(&root, &lib.tools_folder);
     let extra_dirs: Vec<String> = [art_rel, tools_rel]
         .into_iter()
         .filter(|s| !s.is_empty())
@@ -134,7 +138,7 @@ pub fn start_scan(app: AppHandle, state: State<AppState>, lib_id: String) -> Res
     state.pause_flag.store(false, Ordering::SeqCst);
 
     std::thread::spawn(move || {
-        run_scan(app, lib_id, root, rules, extra_dirs, app_data_dir, cancel, pause, scanning);
+        run_scan(app, lib_id, root, lib, rules, extra_dirs, app_data_dir, cancel, pause, scanning);
     });
 
     Ok(())
@@ -144,6 +148,7 @@ fn run_scan(
     app: AppHandle,
     lib_id: String,
     root: PathBuf,
+    lib: Library,
     rules: MatchRules,
     extra_dirs: Vec<String>,
     app_data_dir: PathBuf,
@@ -151,7 +156,7 @@ fn run_scan(
     pause: Arc<AtomicBool>,
     scanning: Arc<AtomicBool>,
 ) {
-    let result = scanner::scan(&root, &rules, &extra_dirs, &cancel, &pause, |count, dir| {
+    let result = scanner::scan(&root, &lib, &rules, &extra_dirs, &cancel, &pause, |count, dir| {
         let _ = app.emit(
             "scan://progress",
             ScanProgress {

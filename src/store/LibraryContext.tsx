@@ -15,14 +15,10 @@ const defaultConfig: Config = {
   libraries: [],
   active_library_id: null,
   match_rules: {
-    include_dirs: [],
-    exclude_dirs: [],
     preview_suffixes: ["", "_preview", "_thumb", "_预览"],
     category_rules: [],
     format_families: [],
   },
-  art_folder: "",
-  tools_folder: "",
   cache_dir: "",
 }
 
@@ -53,6 +49,7 @@ interface LibraryState {
   addLibrary: (name: string, path: string) => Promise<Library>
   removeLibrary: (id: string) => Promise<void>
   setActiveLibrary: (id: string) => Promise<void>
+  updateActiveLibrary: (patch: Partial<Library>) => Promise<void>
   startScan: () => Promise<void>
   cancelScan: () => Promise<void>
   pauseScan: () => Promise<void>
@@ -189,6 +186,14 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     setConfigState(await api.getConfig())
   }
 
+  const updateActiveLibrary = async (patch: Partial<Library>) => {
+    if (!activeLibrary) return
+    const libraries = config.libraries.map((l) =>
+      l.id === activeLibrary.id ? { ...l, ...patch } : l,
+    )
+    await setConfig({ ...config, libraries })
+  }
+
   const startScan = async () => {
     if (!isTauri || !activeLibrary) return
     setError(null)
@@ -262,6 +267,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
         addLibrary,
         removeLibrary,
         setActiveLibrary,
+        updateActiveLibrary,
         startScan,
         cancelScan,
         pauseScan,

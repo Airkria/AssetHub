@@ -7,18 +7,16 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use ignore::WalkBuilder;
 
 use crate::matcher::categorize_asset;
-use crate::models::{Asset, MatchRules};
+use crate::models::{Asset, Library, MatchRules};
 
 const PREVIEW_EXTS: [&str; 6] = ["png", "jpg", "jpeg", "webp", "gif", "bmp"];
-/// 并行遍历线程数（慢 NAS 上过高的并发会互相挤占 IO，8 是较稳的默认值）
 const SCAN_THREADS: usize = 8;
 
 /// 并行递归扫描库根目录（ignore 的 WalkParallel）。
-/// - `cancel` / `pause`：取消与暂停标志，各线程周期检查。
-/// - `on_progress`：约每 150ms 回调一次（已扫描文件数、当前目录）。
-/// 返回 `Ok(None)` 表示被取消；`Ok(Some(assets))` 表示完成（已含预览图关联）。
+/// `lib` 提供每库独立的扫描范围，`rules` 提供全局的分类/预览规则。
 pub fn scan(
     root: &Path,
+    lib: &Library,
     rules: &MatchRules,
     extra_dirs: &[String],
     cancel: &Arc<AtomicBool>,
@@ -32,17 +30,18 @@ pub fn scan(
 
     let cancel = Arc::clone(cancel);
     let pause = Arc::clone(pause);
+    let lib = Arc::new(lib.clone());
     let rules = Arc::new(rules.clone());
     let extra_dirs = extra_dirs.to_vec();
     let root = root.to_path_buf();
     let on_progress = Arc::new(on_progress);
 
     // 确定扫描根：有 include 范围时只遍历那些目录（+ 模块文件夹），否则遍历整个库根
-    let mut builder = if rules.include_dirs.is_empty() {
+    let mut builder = if lib.include_dirs.is_empty() {
         WalkBuilder::new(&root)
     } else {
-        let mut b = WalkBuilder::new(root.join(&rules.include_dirs[0]));
-        for inc in rules.include_dirs.iter().skip(1) {
+        let mut b = WalkBuilder::new(root.join(&lib.include_dirs[0]));
+        for inc in lib.include_dirs.iter().skip(1) {
             b.add(root.join(inc));
         }
         for extra in &extra_dirs {
@@ -64,6 +63,7 @@ pub fn scan(
         let cancelled = Arc::clone(&cancelled);
         let cancel = Arc::clone(&cancel);
         let pause = Arc::clone(&pause);
+        let lib = Arc::clone(&lib);
         let rules = Arc::clone(&rules);
         let extra_dirs = extra_dirs.clone();
         let root = root.clone();
@@ -88,7 +88,6 @@ pub fn scan(
             };
             let ft = entry.file_type();
 
-            // 进入目录：仅刷新"当前目录"进度（不增加计数），避免读大目录时进度卡住
             if ft.as_ref().map(|t| t.is_dir()).unwrap_or(false) {
                 let now = SystemTime::now()
                     .duration_since(UNIX_EPOCH)
@@ -115,15 +114,13 @@ pub fn scan(
                 Err(_) => return ignore::WalkState::Continue,
             };
             let rel_str = rel.to_string_lossy().replace('\\', "/");
-            // 模块文件夹（美术设定/工具）始终扫描，即使不在 include 范围内
             let in_extra = extra_dirs
                 .iter()
                 .any(|d| !d.is_empty() && rel_str.starts_with(d.as_str()));
-            if !rules.is_included(rel) && !in_extra {
+            if !lib.is_included(rel) && !in_extra {
                 return ignore::WalkState::Continue;
             }
 
-            // 用遍历时已缓存的 metadata，避免每文件一次额外 stat（NAS 上很贵）
             let meta = entry.metadata().ok();
             let ext = path
                 .extension()
@@ -192,13 +189,11 @@ pub fn scan(
         return Ok(None);
     }
 
-    // 安全取出扫描结果（不用 try_unwrap，避免线程未完全退出时静默丢数据）
     let mut assets = {
         let mut guard = assets.lock().unwrap();
         std::mem::take(&mut *guard)
     };
     link_previews(&mut assets, &rules);
-    // 预览图不参与分类（它只作为包体的缩略图/预览图）
     for a in assets.iter_mut() {
         if a.is_preview {
             a.category = String::new();
@@ -252,8 +247,6 @@ fn link_previews(assets: &mut [Asset], rules: &MatchRules) {
     }
 }
 
-/// 判断图片 stem 是否为该包体的预览图：
-/// 同名 / 精确后缀（_preview 等）/ 数字后缀（_1、_2…）。
 fn is_preview_stem(img_stem: &str, asset_stem: &str, rules: &MatchRules) -> bool {
     if img_stem == asset_stem {
         return true;

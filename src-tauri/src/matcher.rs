@@ -1,8 +1,8 @@
 use std::path::Path;
 
-use crate::models::{CategoryRule, MatchRules};
+use crate::models::{CategoryRule, Library};
 
-impl MatchRules {
+impl Library {
     /// 判断某文件（相对库根的路径）是否在扫描范围内。
     pub fn is_included(&self, rel: &Path) -> bool {
         let rel = rel.to_string_lossy().replace('\\', "/");
@@ -49,14 +49,13 @@ fn segment_matches(actual: &str, pattern: &str) -> bool {
     if actual == pattern {
         return true;
     }
-    // "01_Texture-贴图库" 的 code 部分 "01_Texture" 可被 "01_Texture" 匹配
     match actual.split_once('-') {
         Some((code, _)) => code == pattern,
         None => false,
     }
 }
 
-/// 分类：先按扩展名规则（#7），命中则用规则分类；否则回退目录名分类。
+/// 分类：先按扩展名规则（全局），命中则用规则分类；否则回退目录名分类。
 pub fn categorize_asset(ext: &str, rel: &Path, rules: &[CategoryRule]) -> String {
     let ext = ext.trim_start_matches('.').to_lowercase();
     for rule in rules {
@@ -71,7 +70,6 @@ pub fn categorize_asset(ext: &str, rel: &Path, rules: &[CategoryRule]) -> String
     categorize_by_dir(rel)
 }
 
-/// 目录名分类：取文件所在目录的"清理后"名称。
 fn categorize_by_dir(rel: &Path) -> String {
     let parent = rel.parent();
     let comp = parent
