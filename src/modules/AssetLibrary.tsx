@@ -175,8 +175,8 @@ export function AssetLibrary() {
               min={2}
               max={6}
               step={1}
-              value={cols}
-              onChange={(e) => setCols(Number(e.target.value))}
+              value={8 - cols}
+              onChange={(e) => setCols(8 - Number(e.target.value))}
               className="w-24 accent-primary"
               title="缩略图大小（Ctrl+滚轮也可调整）"
             />
@@ -190,7 +190,6 @@ export function AssetLibrary() {
             <VirtualGrid
               count={filtered.length}
               cols={cols}
-              rowHeight={250}
               className="flex-1 min-w-0 overflow-auto px-6 py-4"
               onWheel={onWheel}
               renderItem={(i) => {
@@ -210,12 +209,12 @@ export function AssetLibrary() {
                       <Thumbnail
                         path={imgPath}
                         alt={a.name}
-                        className="h-40 w-full object-cover"
+                        className="aspect-square w-full object-cover"
                       />
                     ) : (
                       <div
                         className={cn(
-                          "h-40 bg-gradient-to-br",
+                          "aspect-square bg-gradient-to-br",
                           fallbackGradient(a.id),
                         )}
                       />
@@ -271,7 +270,7 @@ function AssetDetail({
   const [zoomed, setZoomed] = useState(false)
   const previews = asset.preview_paths
   const idx = Math.min(imgIdx, Math.max(0, previews.length - 1))
-  const currentImg = previews[idx] ?? null
+  const currentImg = previews[idx] ?? (IMAGE_EXTS.has(asset.ext) ? asset.path : null)
 
   return (
     <div className="space-y-3">

@@ -88,8 +88,8 @@ export function ArtDirection() {
               min={2}
               max={6}
               step={1}
-              value={cols}
-              onChange={(e) => setCols(Number(e.target.value))}
+              value={8 - cols}
+              onChange={(e) => setCols(8 - Number(e.target.value))}
               className="w-24 accent-primary"
               title="缩略图大小（Ctrl+滚轮也可调整）"
             />
@@ -107,7 +107,6 @@ export function ArtDirection() {
             <VirtualGrid
               count={filtered.length}
               cols={cols}
-              rowHeight={220}
               className="flex-1 min-w-0 overflow-auto px-6 py-4"
               onWheel={onWheel}
               renderItem={(i) => {
@@ -125,10 +124,10 @@ export function ArtDirection() {
                       <Thumbnail
                         path={a.preview_paths[0] ?? a.path}
                         alt={a.name}
-                        className="h-36 w-full object-cover"
+                        className="aspect-[4/3] w-full object-cover"
                       />
                     ) : (
-                      <div className="h-36 bg-gradient-to-br from-slate-600 to-slate-800" />
+                      <div className="aspect-[4/3] bg-gradient-to-br from-slate-600 to-slate-800" />
                     )}
                     <div className="p-2">
                       <div className="truncate text-sm">{a.name}</div>

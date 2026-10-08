@@ -16,7 +16,7 @@ export function useThumbSize(initial = 3) {
   const onWheel = useCallback((e: ReactWheelEvent<HTMLDivElement>) => {
     if (!e.ctrlKey) return
     e.preventDefault()
-    setCols((c) => Math.min(6, Math.max(2, c + (e.deltaY > 0 ? -1 : 1))))
+    setCols((c) => Math.min(6, Math.max(2, c + (e.deltaY > 0 ? 1 : -1))))
   }, [])
 
   return { cols, setCols, gridStyle, onWheel }
