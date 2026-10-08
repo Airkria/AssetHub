@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { VirtualGrid } from "@/components/VirtualGrid"
 import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { TagEditor } from "@/components/TagEditor"
@@ -32,7 +33,7 @@ function fallbackGradient(id: string) {
 
 export function AssetLibrary() {
   const { assets, config, updateMetadata } = useLibrary()
-  const { cols, setCols, gridStyle, onWheel } = useThumbSize(3)
+  const { cols, setCols, onWheel } = useThumbSize(3)
   const [mode, setMode] = useState<"category" | "tag">("category")
   const [category, setCategory] = useState("全部")
   const [tag, setTag] = useState("全部")
@@ -173,15 +174,21 @@ export function AssetLibrary() {
           </ScrollArea>
         </aside>
 
-        <ScrollArea className="flex-1 px-6 py-4">
-          {filtered.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
-              <p>暂无资产</p>
-              <p className="mt-1 text-xs">请先在「设置」中配置资源库并扫描</p>
-            </div>
-          ) : (
-            <div className="grid gap-4" style={gridStyle} onWheel={onWheel}>
-              {filtered.map((a) => (
+        {filtered.length === 0 ? (
+          <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
+            <p>暂无资产</p>
+            <p className="mt-1 text-xs">请先在「设置」中配置资源库并扫描</p>
+          </div>
+        ) : (
+          <VirtualGrid
+            count={filtered.length}
+            cols={cols}
+            rowHeight={250}
+            className="flex-1 min-w-0 overflow-auto px-6 py-4"
+            onWheel={onWheel}
+            renderItem={(i) => {
+              const a = filtered[i]
+              return (
                 <Card
                   key={a.id}
                   className={cn(
@@ -194,12 +201,12 @@ export function AssetLibrary() {
                     <img
                       src={assetUrl(a.preview_paths[0])}
                       alt={a.name}
-                      className="aspect-square w-full object-cover"
+                      className="h-40 w-full object-cover"
                     />
                   ) : (
                     <div
                       className={cn(
-                        "aspect-square bg-gradient-to-br",
+                        "h-40 bg-gradient-to-br",
                         fallbackGradient(a.id),
                       )}
                     />
@@ -212,10 +219,10 @@ export function AssetLibrary() {
                     </div>
                   </div>
                 </Card>
-              ))}
-            </div>
-          )}
-        </ScrollArea>
+              )
+            }}
+          />
+        )}
 
         <div
           onMouseDown={startDrag}

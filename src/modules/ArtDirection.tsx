@@ -3,7 +3,7 @@ import { Search, PenLine, Check, X } from "lucide-react"
 import { ModuleHeader } from "@/components/layout/module-header"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
+import { VirtualGrid } from "@/components/VirtualGrid"
 import { Card } from "@/components/ui/card"
 import { TagEditor } from "@/components/TagEditor"
 import { useLibrary } from "@/store/LibraryContext"
@@ -17,7 +17,7 @@ const DISPLAYABLE = new Set(["png", "jpg", "jpeg", "webp", "bmp", "gif"])
 
 export function ArtDirection() {
   const { assets, config, updateMetadata, renameAsset } = useLibrary()
-  const { cols, setCols, gridStyle, onWheel } = useThumbSize(3)
+  const { cols, setCols, onWheel } = useThumbSize(3)
   const [query, setQuery] = useState("")
   const [currentId, setCurrentId] = useState<string | null>(null)
   const [detailWidth, setDetailWidth] = useState(288)
@@ -90,19 +90,25 @@ export function ArtDirection() {
       </ModuleHeader>
 
       <div className="flex min-h-0 flex-1">
-        <ScrollArea className="flex-1 px-6 py-4">
-          {filtered.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
-              <p>暂无美术参考</p>
-              <p className="mt-1 text-xs">
-                {config.art_folder
-                  ? "请在该文件夹放入参考图后重新扫描"
-                  : "未配置美术设定文件夹（设置 → 路径设置）"}
-              </p>
-            </div>
-          ) : (
-            <div className="grid gap-4" style={gridStyle} onWheel={onWheel}>
-              {filtered.map((a) => (
+        {filtered.length === 0 ? (
+          <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
+            <p>暂无美术参考</p>
+            <p className="mt-1 text-xs">
+              {config.art_folder
+                ? "请在该文件夹放入参考图后重新扫描"
+                : "未配置美术设定文件夹（设置 → 路径设置）"}
+            </p>
+          </div>
+        ) : (
+          <VirtualGrid
+            count={filtered.length}
+            cols={cols}
+            rowHeight={220}
+            className="flex-1 min-w-0 overflow-auto px-6 py-4"
+            onWheel={onWheel}
+            renderItem={(i) => {
+              const a = filtered[i]
+              return (
                 <Card
                   key={a.id}
                   className={cn(
@@ -115,10 +121,10 @@ export function ArtDirection() {
                     <img
                       src={assetUrl(a.preview_paths[0] ?? a.path)}
                       alt={a.name}
-                      className="aspect-[4/3] w-full object-cover"
+                      className="h-36 w-full object-cover"
                     />
                   ) : (
-                    <div className="aspect-[4/3] bg-gradient-to-br from-slate-600 to-slate-800" />
+                    <div className="h-36 bg-gradient-to-br from-slate-600 to-slate-800" />
                   )}
                   <div className="p-2">
                     <div className="truncate text-sm">{a.name}</div>
@@ -131,10 +137,10 @@ export function ArtDirection() {
                     </div>
                   </div>
                 </Card>
-              ))}
-            </div>
-          )}
-        </ScrollArea>
+              )
+            }}
+          />
+        )}
 
         <div
           onMouseDown={startDrag}
