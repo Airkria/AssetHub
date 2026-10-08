@@ -57,3 +57,25 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* 暗色滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted));
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground));
+}
+
+/* 暗色下拉选项 */
+select option {
+  background-color: hsl(var(--card));
+  color: hsl(var(--foreground));
+}

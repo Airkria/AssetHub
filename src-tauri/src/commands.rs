@@ -362,3 +362,39 @@ pub fn list_rules_files(dir: String) -> Vec<String> {
     files.sort();
     files
 }
+
+/// 生成/返回图片缩略图（本地缓存，避免每次从 NAS 读原图）。
+/// 返回缓存缩略图的路径；生成失败则返回原路径。
+#[tauri::command]
+pub fn get_thumbnail(state: State<AppState>, path: String) -> Result<String, String> {
+    let cache_dir = state.app_data_dir.join("thumbnails");
+    std::fs::create_dir_all(&cache_dir).map_err(|e| e.to_string())?;
+
+    let mtime = std::fs::metadata(&path)
+        .ok()
+        .and_then(|m| m.modified().ok())
+        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let key = {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        path.hash(&mut h);
+        mtime.hash(&mut h);
+        format!("{:016x}", h.finish())
+    };
+    let thumb_path = cache_dir.join(format!("{}.png", key));
+
+    if thumb_path.exists() {
+        return Ok(thumb_path.to_string_lossy().to_string());
+    }
+
+    match image::open(&path) {
+        Ok(img) => {
+            let thumb = img.thumbnail(320, 320);
+            thumb.save(&thumb_path).map_err(|e| e.to_string())?;
+            Ok(thumb_path.to_string_lossy().to_string())
+        }
+        Err(_) => Ok(path), // 无法解码（如超大/特殊格式）则回退原图
+    }
+}

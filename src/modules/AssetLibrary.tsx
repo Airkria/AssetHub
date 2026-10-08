@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { VirtualGrid } from "@/components/VirtualGrid"
+import { Thumbnail } from "@/components/Thumbnail"
 import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { TagEditor } from "@/components/TagEditor"
@@ -113,16 +114,6 @@ export function AssetLibrary() {
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <input
-          type="range"
-          min={2}
-          max={6}
-          step={1}
-          value={cols}
-          onChange={(e) => setCols(Number(e.target.value))}
-          className="w-24 accent-primary"
-          title="缩略图大小（Ctrl+滚轮也可调整）"
-        />
       </ModuleHeader>
 
       <div className="flex min-h-0 flex-1">
@@ -174,55 +165,69 @@ export function AssetLibrary() {
           </ScrollArea>
         </aside>
 
-        {filtered.length === 0 ? (
-          <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
-            <p>暂无资产</p>
-            <p className="mt-1 text-xs">请先在「设置」中配置资源库并扫描</p>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex items-center justify-end border-b px-4 py-2">
+            <input
+              type="range"
+              min={2}
+              max={6}
+              step={1}
+              value={cols}
+              onChange={(e) => setCols(Number(e.target.value))}
+              className="w-24 accent-primary"
+              title="缩略图大小（Ctrl+滚轮也可调整）"
+            />
           </div>
-        ) : (
-          <VirtualGrid
-            count={filtered.length}
-            cols={cols}
-            rowHeight={250}
-            className="flex-1 min-w-0 overflow-auto px-6 py-4"
-            onWheel={onWheel}
-            renderItem={(i) => {
-              const a = filtered[i]
-              return (
-                <Card
-                  key={a.id}
-                  className={cn(
-                    "cursor-pointer overflow-hidden",
-                    currentId === a.id && "ring-2 ring-ring",
-                  )}
-                  onClick={() => setCurrentId(a.id)}
-                >
-                  {a.preview_paths[0] ? (
-                    <img
-                      src={assetUrl(a.preview_paths[0])}
-                      alt={a.name}
-                      className="h-40 w-full object-cover"
-                    />
-                  ) : (
-                    <div
-                      className={cn(
-                        "h-40 bg-gradient-to-br",
-                        fallbackGradient(a.id),
-                      )}
-                    />
-                  )}
-                  <div className="p-3">
-                    <div className="truncate text-sm font-medium">{a.name}</div>
-                    <div className="mt-1 flex items-center gap-1.5">
-                      <Badge variant="outline">{a.category || "未分类"}</Badge>
-                      <span className="text-xs text-muted-foreground">{a.ext}</span>
+          {filtered.length === 0 ? (
+            <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
+              <p>暂无资产</p>
+              <p className="mt-1 text-xs">请先在「设置」中配置资源库并扫描</p>
+            </div>
+          ) : (
+            <VirtualGrid
+              count={filtered.length}
+              cols={cols}
+              rowHeight={250}
+              className="flex-1 min-w-0 overflow-auto px-6 py-4"
+              onWheel={onWheel}
+              renderItem={(i) => {
+                const a = filtered[i]
+                return (
+                  <Card
+                    key={a.id}
+                    className={cn(
+                      "cursor-pointer overflow-hidden",
+                      currentId === a.id && "ring-2 ring-ring",
+                    )}
+                    onClick={() => setCurrentId(a.id)}
+                  >
+                    {a.preview_paths[0] ? (
+                      <Thumbnail
+                        path={a.preview_paths[0]}
+                        alt={a.name}
+                        className="h-40 w-full object-cover"
+                      />
+                    ) : (
+                      <div
+                        className={cn(
+                          "h-40 bg-gradient-to-br",
+                          fallbackGradient(a.id),
+                        )}
+                      />
+                    )}
+                    <div className="p-3">
+                      <div className="truncate text-sm font-medium">{a.name}</div>
+                      <div className="mt-1 flex items-center gap-1.5">
+                        <Badge variant="outline">{a.category || "未分类"}</Badge>
+                        <span className="text-xs text-muted-foreground">{a.ext}</span>
+                      </div>
                     </div>
-                  </div>
-                </Card>
-              )
-            }}
-          />
-        )}
+                  </Card>
+                )
+              }}
+            />
+          )}
+        </div>
 
         <div
           onMouseDown={startDrag}

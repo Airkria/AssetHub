@@ -57,7 +57,8 @@ pub fn run() {
             commands::open_url,
             commands::save_rules_file,
             commands::load_rules_file,
-            commands::list_rules_files
+            commands::list_rules_files,
+            commands::get_thumbnail
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

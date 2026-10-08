@@ -4,6 +4,7 @@ import { ModuleHeader } from "@/components/layout/module-header"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { VirtualGrid } from "@/components/VirtualGrid"
+import { Thumbnail } from "@/components/Thumbnail"
 import { Card } from "@/components/ui/card"
 import { TagEditor } from "@/components/TagEditor"
 import { useLibrary } from "@/store/LibraryContext"
@@ -77,70 +78,74 @@ export function ArtDirection() {
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <input
-          type="range"
-          min={2}
-          max={6}
-          step={1}
-          value={cols}
-          onChange={(e) => setCols(Number(e.target.value))}
-          className="w-24 accent-primary"
-          title="缩略图大小（Ctrl+滚轮也可调整）"
-        />
       </ModuleHeader>
 
       <div className="flex min-h-0 flex-1">
-        {filtered.length === 0 ? (
-          <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
-            <p>暂无美术参考</p>
-            <p className="mt-1 text-xs">
-              {config.art_folder
-                ? "请在该文件夹放入参考图后重新扫描"
-                : "未配置美术设定文件夹（设置 → 路径设置）"}
-            </p>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex items-center justify-end border-b px-4 py-2">
+            <input
+              type="range"
+              min={2}
+              max={6}
+              step={1}
+              value={cols}
+              onChange={(e) => setCols(Number(e.target.value))}
+              className="w-24 accent-primary"
+              title="缩略图大小（Ctrl+滚轮也可调整）"
+            />
           </div>
-        ) : (
-          <VirtualGrid
-            count={filtered.length}
-            cols={cols}
-            rowHeight={220}
-            className="flex-1 min-w-0 overflow-auto px-6 py-4"
-            onWheel={onWheel}
-            renderItem={(i) => {
-              const a = filtered[i]
-              return (
-                <Card
-                  key={a.id}
-                  className={cn(
-                    "cursor-pointer overflow-hidden",
-                    currentId === a.id && "ring-2 ring-ring",
-                  )}
-                  onClick={() => setCurrentId(a.id)}
-                >
-                  {DISPLAYABLE.has(a.ext) || a.preview_paths[0] ? (
-                    <img
-                      src={assetUrl(a.preview_paths[0] ?? a.path)}
-                      alt={a.name}
-                      className="h-36 w-full object-cover"
-                    />
-                  ) : (
-                    <div className="h-36 bg-gradient-to-br from-slate-600 to-slate-800" />
-                  )}
-                  <div className="p-2">
-                    <div className="truncate text-sm">{a.name}</div>
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {a.tags.slice(0, 2).map((t) => (
-                        <span key={t} className="text-[10px] text-muted-foreground">
-                          #{t}
-                        </span>
-                      ))}
+          {filtered.length === 0 ? (
+            <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
+              <p>暂无美术参考</p>
+              <p className="mt-1 text-xs">
+                {config.art_folder
+                  ? "请在该文件夹放入参考图后重新扫描"
+                  : "未配置美术设定文件夹（设置 → 路径设置）"}
+              </p>
+            </div>
+          ) : (
+            <VirtualGrid
+              count={filtered.length}
+              cols={cols}
+              rowHeight={220}
+              className="flex-1 min-w-0 overflow-auto px-6 py-4"
+              onWheel={onWheel}
+              renderItem={(i) => {
+                const a = filtered[i]
+                return (
+                  <Card
+                    key={a.id}
+                    className={cn(
+                      "cursor-pointer overflow-hidden",
+                      currentId === a.id && "ring-2 ring-ring",
+                    )}
+                    onClick={() => setCurrentId(a.id)}
+                  >
+                    {DISPLAYABLE.has(a.ext) || a.preview_paths[0] ? (
+                      <Thumbnail
+                        path={a.preview_paths[0] ?? a.path}
+                        alt={a.name}
+                        className="h-36 w-full object-cover"
+                      />
+                    ) : (
+                      <div className="h-36 bg-gradient-to-br from-slate-600 to-slate-800" />
+                    )}
+                    <div className="p-2">
+                      <div className="truncate text-sm">{a.name}</div>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {a.tags.slice(0, 2).map((t) => (
+                          <span key={t} className="text-[10px] text-muted-foreground">
+                            #{t}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                </Card>
-              )
-            }}
-          />
-        )}
+                  </Card>
+                )
+              }}
+            />
+          )}
+        </div>
 
         <div
           onMouseDown={startDrag}

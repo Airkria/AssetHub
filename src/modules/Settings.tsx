@@ -464,6 +464,7 @@ function ConfigFileSection({
 }) {
   const [kind, setKind] = useState<"public" | "personal">("public")
   const [rulesName, setRulesName] = useState("")
+  const [currentConfig, setCurrentConfig] = useState("")
 
   const saveConfigFile = async () => {
     const name = rulesName.trim()
@@ -474,6 +475,7 @@ function ConfigFileSection({
     const fullPath = `${folder.replace(/[\\/]+$/, "")}\\${kind}_${name}.json`
     await api.saveRulesFile(fullPath, rules)
     await setConfig({ ...config, match_rules: rules })
+    setCurrentConfig(fullPath)
   }
 
   const loadConfigFile = async () => {
@@ -482,6 +484,7 @@ function ConfigFileSection({
     const loaded = await api.loadRulesFile(path)
     setForm(matchRulesToForm(loaded))
     await setConfig({ ...config, match_rules: loaded })
+    setCurrentConfig(path)
   }
 
   return (
@@ -493,6 +496,13 @@ function ConfigFileSection({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
+        <div className="flex items-center gap-2 rounded-md border p-2">
+          <span className="shrink-0 text-sm text-muted-foreground">当前配置</span>
+          <span className="min-w-0 flex-1 truncate text-xs">
+            {currentConfig || "未加载配置文件"}
+          </span>
+        </div>
+        <Separator />
         <div>
           <label className="mb-1 block text-sm text-muted-foreground">
             保存当前匹配规则到文件
