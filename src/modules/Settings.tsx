@@ -1,4 +1,4 @@
-import { useRef, useState, type Dispatch, type SetStateAction } from "react"
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react"
 import {
   Save,
   FolderSearch,
@@ -98,6 +98,14 @@ export function Settings() {
   const { config, setConfig } = useLibrary()
   const [form, setForm] = useState<RulesForm>(() => matchRulesToForm(config.match_rules))
   const [active, setActive] = useState<SectionKey>("paths")
+
+  // 配置从外部变化（选库加载配置等）时，重新同步表单
+  useEffect(() => {
+    if (JSON.stringify(formToMatchRules(form)) !== JSON.stringify(config.match_rules)) {
+      setForm(matchRulesToForm(config.match_rules))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config.match_rules])
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const pathsRef = useRef<HTMLElement | null>(null)
   const rulesRef = useRef<HTMLElement | null>(null)
@@ -485,6 +493,10 @@ function ConfigFileSection({
   const [kind, setKind] = useState<"public" | "personal">("public")
   const [rulesName, setRulesName] = useState("")
   const [currentConfig, setCurrentConfig] = useState("")
+  const [baseForm, setBaseForm] = useState<RulesForm | null>(null)
+
+  const dirty =
+    baseForm !== null && JSON.stringify(form) !== JSON.stringify(baseForm)
 
   const saveConfigFile = async () => {
     const name = rulesName.trim()
@@ -496,15 +508,26 @@ function ConfigFileSection({
     await api.saveRulesFile(fullPath, rules)
     await setConfig({ ...config, match_rules: rules })
     setCurrentConfig(fullPath)
+    setBaseForm(form)
+  }
+
+  const overwriteConfigFile = async () => {
+    if (!currentConfig) return
+    const rules = formToMatchRules(form)
+    await api.saveRulesFile(currentConfig, rules)
+    await setConfig({ ...config, match_rules: rules })
+    setBaseForm(form)
   }
 
   const loadConfigFile = async () => {
     const path = await pickFile(["json"])
     if (!path) return
     const loaded = await api.loadRulesFile(path)
-    setForm(matchRulesToForm(loaded))
+    const loadedForm = matchRulesToForm(loaded)
+    setForm(loadedForm)
     await setConfig({ ...config, match_rules: loaded })
     setCurrentConfig(path)
+    setBaseForm(loadedForm)
   }
 
   return (
@@ -542,10 +565,22 @@ function ConfigFileSection({
               placeholder="名称（如 team_rules）"
               className="h-8 flex-1 text-sm"
             />
-            <Button size="sm" onClick={saveConfigFile}>
-              <Save className="h-4 w-4" />
-              保存配置文件
-            </Button>
+            {currentConfig && dirty ? (
+              <>
+                <Button size="sm" onClick={overwriteConfigFile}>
+                  <Save className="h-4 w-4" />
+                  覆盖配置
+                </Button>
+                <Button size="sm" variant="outline" onClick={saveConfigFile}>
+                  另存为
+                </Button>
+              </>
+            ) : (
+              <Button size="sm" onClick={saveConfigFile}>
+                <Save className="h-4 w-4" />
+                保存配置文件
+              </Button>
+            )}
           </div>
         </div>
 

@@ -37,7 +37,22 @@ pub fn scan(
     let root = root.to_path_buf();
     let on_progress = Arc::new(on_progress);
 
-    let walker = WalkBuilder::new(&root)
+    // 确定扫描根：有 include 范围时只遍历那些目录（+ 模块文件夹），否则遍历整个库根
+    let mut builder = if rules.include_dirs.is_empty() {
+        WalkBuilder::new(&root)
+    } else {
+        let mut b = WalkBuilder::new(root.join(&rules.include_dirs[0]));
+        for inc in rules.include_dirs.iter().skip(1) {
+            b.add(root.join(inc));
+        }
+        for extra in &extra_dirs {
+            if !extra.is_empty() {
+                b.add(root.join(extra));
+            }
+        }
+        b
+    };
+    let walker = builder
         .follow_links(false)
         .threads(SCAN_THREADS)
         .build_parallel();
