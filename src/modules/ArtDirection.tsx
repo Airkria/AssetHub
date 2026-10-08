@@ -215,11 +215,11 @@ function ArtDetail({
         <Thumbnail
           path={img}
           alt={asset.name}
-          className="aspect-video w-full cursor-zoom-in rounded-lg object-cover"
+          className="max-h-80 w-full cursor-zoom-in rounded-lg object-contain"
           onClick={() => setZoomed(true)}
         />
       ) : (
-        <div className="aspect-video w-full rounded-lg bg-gradient-to-br from-slate-600 to-slate-800" />
+        <div className="h-40 w-full rounded-lg bg-gradient-to-br from-slate-600 to-slate-800" />
       )}
 
       {editing ? (

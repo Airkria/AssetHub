@@ -279,13 +279,13 @@ function AssetDetail({
         <Thumbnail
           path={currentImg}
           alt={asset.name}
-          className="aspect-video w-full cursor-zoom-in rounded-lg object-cover"
+          className="max-h-80 w-full cursor-zoom-in rounded-lg object-contain"
           onClick={() => setZoomed(true)}
         />
       ) : (
         <div
           className={cn(
-            "aspect-video w-full rounded-lg bg-gradient-to-br",
+            "h-40 w-full rounded-lg bg-gradient-to-br",
             fallbackGradient(asset.id),
           )}
         />
