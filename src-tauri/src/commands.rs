@@ -162,8 +162,10 @@ fn run_scan(
     });
 
     match result {
-        Ok(Some(assets)) => {
+        Ok(Some(mut assets)) => {
             let count = assets.len();
+            // 增量：保留未变文件的用户元数据（标签/说明/链接），避免重扫清空标注
+            merge_metadata(&mut assets, &store::load(&app_data_dir, &lib_id));
             match store::save(&app_data_dir, &lib_id, &assets) {
                 Ok(()) => {
                     let _ = app.emit("scan://done", ScanDone { count });
@@ -186,6 +188,20 @@ fn run_scan(
 #[tauri::command]
 pub fn cancel_scan(state: State<AppState>) {
     state.cancel_flag.store(true, Ordering::SeqCst);
+}
+
+/// 增量：把旧索引里未变文件的用户元数据（标签/说明/链接）合并到新扫描结果。
+fn merge_metadata(new_assets: &mut [Asset], old_assets: &[Asset]) {
+    use std::collections::HashMap;
+    let old: HashMap<&str, &Asset> = old_assets.iter().map(|a| (a.id.as_str(), a)).collect();
+    for a in new_assets.iter_mut() {
+        if let Some(o) = old.get(a.id.as_str()) {
+            a.tags = o.tags.clone();
+            a.description = o.description.clone();
+            a.link = o.link.clone();
+            a.edited = o.edited;
+        }
+    }
 }
 
 #[tauri::command]
