@@ -24,10 +24,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { useLibrary } from "@/store/LibraryContext"
-import { api, askConfirm, pickFolder } from "@/api"
+import { api, askConfirm, pickFile, pickFolder } from "@/api"
 import { cn } from "@/lib/utils"
 import type { MatchRules } from "@/types"
 
@@ -465,8 +464,6 @@ function ConfigFileSection({
 }) {
   const [kind, setKind] = useState<"public" | "personal">("public")
   const [rulesName, setRulesName] = useState("")
-  const [rulesFolder, setRulesFolder] = useState("")
-  const [foundFiles, setFoundFiles] = useState<string[]>([])
 
   const saveConfigFile = async () => {
     const name = rulesName.trim()
@@ -479,16 +476,10 @@ function ConfigFileSection({
     await setConfig({ ...config, match_rules: rules })
   }
 
-  const pickLoadFolder = async () => {
-    const folder = await pickFolder()
-    if (!folder) return
-    setRulesFolder(folder)
-    setFoundFiles(await api.listRulesFiles(folder))
-  }
-
-  const loadFile = async (filename: string) => {
-    const fullPath = `${rulesFolder.replace(/[\\/]+$/, "")}\\${filename}`
-    const loaded = await api.loadRulesFile(fullPath)
+  const loadConfigFile = async () => {
+    const path = await pickFile(["json"])
+    if (!path) return
+    const loaded = await api.loadRulesFile(path)
     setForm(matchRulesToForm(loaded))
     await setConfig({ ...config, match_rules: loaded })
   }
@@ -534,29 +525,10 @@ function ConfigFileSection({
           <label className="mb-1 block text-sm text-muted-foreground">
             从文件加载匹配规则
           </label>
-          <Button size="sm" variant="outline" onClick={pickLoadFolder}>
+          <Button size="sm" variant="outline" onClick={loadConfigFile}>
             <FolderOpen className="h-4 w-4" />
-            选择文件夹
+            加载配置文件
           </Button>
-          {rulesFolder && (
-            <p className="mt-1 truncate text-xs text-muted-foreground">
-              {rulesFolder}
-            </p>
-          )}
-          {foundFiles.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1">
-              {foundFiles.map((f) => (
-                <Badge
-                  key={f}
-                  variant="outline"
-                  className="cursor-pointer hover:bg-accent"
-                  onClick={() => loadFile(f)}
-                >
-                  {f}
-                </Badge>
-              ))}
-            </div>
-          )}
         </div>
       </CardContent>
     </Card>

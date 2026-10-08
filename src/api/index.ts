@@ -49,6 +49,17 @@ export async function pickFolder(): Promise<string | null> {
   return typeof selected === "string" ? selected : null
 }
 
+// 选择文件（原生对话框，可过滤扩展名）
+export async function pickFile(extensions: string[]): Promise<string | null> {
+  if (!isTauri) return null
+  const selected = await open({
+    multiple: false,
+    directory: false,
+    filters: [{ name: "配置文件", extensions }],
+  })
+  return typeof selected === "string" ? selected : null
+}
+
 // 确认对话框
 export async function askConfirm(message: string, title: string): Promise<boolean> {
   if (!isTauri) return false

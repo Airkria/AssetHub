@@ -10,8 +10,10 @@ use crate::matcher::categorize_asset;
 use crate::models::{Asset, MatchRules};
 
 const PREVIEW_EXTS: [&str; 6] = ["png", "jpg", "jpeg", "webp", "gif", "bmp"];
+/// 并行遍历线程数（慢 NAS 上过高的并发会互相挤占 IO，8 是较稳的默认值）
+const SCAN_THREADS: usize = 8;
 
-/// 并行递归扫描库根目录（ignore 的 WalkParallel，慢 NAS 上可提速数倍）。
+/// 并行递归扫描库根目录（ignore 的 WalkParallel）。
 /// - `cancel` / `pause`：取消与暂停标志，各线程周期检查。
 /// - `on_progress`：约每 150ms 回调一次（已扫描文件数、当前目录）。
 /// 返回 `Ok(None)` 表示被取消；`Ok(Some(assets))` 表示完成（已含预览图关联）。
@@ -35,7 +37,10 @@ pub fn scan(
     let root = root.to_path_buf();
     let on_progress = Arc::new(on_progress);
 
-    let walker = WalkBuilder::new(&root).follow_links(false).build_parallel();
+    let walker = WalkBuilder::new(&root)
+        .follow_links(false)
+        .threads(SCAN_THREADS)
+        .build_parallel();
 
     walker.run(|| {
         let assets = Arc::clone(&assets);
@@ -66,7 +71,26 @@ pub fn scan(
                 Ok(e) => e,
                 Err(_) => return ignore::WalkState::Continue,
             };
-            if !entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
+            let ft = entry.file_type();
+
+            // 进入目录：仅刷新"当前目录"进度（不增加计数），避免读大目录时进度卡住
+            if ft.as_ref().map(|t| t.is_dir()).unwrap_or(false) {
+                let now = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .map(|d| d.as_millis() as u64)
+                    .unwrap_or(0);
+                let last = last_emit.load(Ordering::Relaxed);
+                if now.saturating_sub(last) >= 150
+                    && last_emit
+                        .compare_exchange(last, now, Ordering::Relaxed, Ordering::Relaxed)
+                        .is_ok()
+                {
+                    let dir_str = entry.path().to_string_lossy().replace('\\', "/");
+                    on_progress(count.load(Ordering::Relaxed), dir_str);
+                }
+                return ignore::WalkState::Continue;
+            }
+            if !ft.map(|t| t.is_file()).unwrap_or(false) {
                 return ignore::WalkState::Continue;
             }
 
@@ -153,9 +177,11 @@ pub fn scan(
         return Ok(None);
     }
 
-    let mut assets = Arc::try_unwrap(assets)
-        .map(|m| m.into_inner().unwrap())
-        .unwrap_or_default();
+    // 安全取出扫描结果（不用 try_unwrap，避免线程未完全退出时静默丢数据）
+    let mut assets = {
+        let mut guard = assets.lock().unwrap();
+        std::mem::take(&mut *guard)
+    };
     link_previews(&mut assets, &rules);
     // 预览图不参与分类（它只作为包体的缩略图/预览图）
     for a in assets.iter_mut() {
