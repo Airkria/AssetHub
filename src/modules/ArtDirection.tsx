@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils"
 import { useThumbSize } from "@/hooks/useThumbSize"
 import type { Asset } from "@/types"
 
-const DISPLAYABLE = new Set(["png", "jpg", "jpeg", "webp", "bmp", "gif"])
+import { IMAGE_EXTS } from "@/lib/formats"
 
 export function ArtDirection() {
   const { assets, activeLibrary, updateMetadata, renameAsset } = useLibrary()
@@ -26,8 +26,8 @@ export function ArtDirection() {
   const artAssets = useMemo(() => {
     return assets.filter((a) => {
       if (a.is_preview) return false
-      if (artFolder) return inFolder(a.path, artFolder)
-      return DISPLAYABLE.has(a.ext)
+      if (!artFolder) return false
+      return inFolder(a.path, artFolder)
     })
   }, [assets, artFolder])
 
@@ -121,7 +121,7 @@ export function ArtDirection() {
                     )}
                     onClick={() => setCurrentId(a.id)}
                   >
-                    {DISPLAYABLE.has(a.ext) || a.preview_paths[0] ? (
+                    {IMAGE_EXTS.has(a.ext) || a.preview_paths[0] ? (
                       <Thumbnail
                         path={a.preview_paths[0] ?? a.path}
                         alt={a.name}
@@ -193,7 +193,7 @@ function ArtDetail({
     setEditing(false)
   }
 
-  const img = asset.preview_paths[0] ?? (DISPLAYABLE.has(asset.ext) ? asset.path : null)
+  const img = asset.preview_paths[0] ?? (IMAGE_EXTS.has(asset.ext) ? asset.path : null)
 
   return (
     <div className="space-y-3">

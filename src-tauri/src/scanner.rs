@@ -9,7 +9,10 @@ use ignore::WalkBuilder;
 use crate::matcher::categorize_asset;
 use crate::models::{Asset, Library, MatchRules};
 
-const PREVIEW_EXTS: [&str; 6] = ["png", "jpg", "jpeg", "webp", "gif", "bmp"];
+const IMAGE_EXTS: [&str; 13] = [
+    "png", "jpg", "jpeg", "webp", "gif", "bmp",
+    "tga", "exr", "hdr", "dds", "psd", "tif", "tiff",
+];
 const SCAN_THREADS: usize = 8;
 
 /// 并行递归扫描库根目录（ignore 的 WalkParallel）。
@@ -206,7 +209,7 @@ pub fn scan(
 fn link_previews(assets: &mut [Asset], rules: &MatchRules) {
     let mut images: HashMap<(String, String), String> = HashMap::new();
     for a in assets.iter() {
-        if PREVIEW_EXTS.contains(&a.ext.as_str()) {
+        if IMAGE_EXTS.contains(&a.ext.as_str()) {
             images
                 .entry((a.rel_dir.clone(), a.stem.clone()))
                 .or_insert(a.path.clone());
@@ -215,7 +218,7 @@ fn link_previews(assets: &mut [Asset], rules: &MatchRules) {
 
     let mut referenced: Vec<String> = Vec::new();
     for a in assets.iter_mut() {
-        if PREVIEW_EXTS.contains(&a.ext.as_str()) {
+        if IMAGE_EXTS.contains(&a.ext.as_str()) {
             continue;
         }
         let mut previews: Vec<String> = Vec::new();

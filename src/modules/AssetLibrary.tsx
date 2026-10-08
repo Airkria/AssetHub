@@ -13,6 +13,7 @@ import { TagEditor } from "@/components/TagEditor"
 import { useLibrary } from "@/store/LibraryContext"
 import { api } from "@/api"
 import { inFolder } from "@/lib/path"
+import { IMAGE_EXTS } from "@/lib/formats"
 import { cn } from "@/lib/utils"
 import { useThumbSize } from "@/hooks/useThumbSize"
 import type { Asset } from "@/types"
@@ -194,6 +195,8 @@ export function AssetLibrary() {
               onWheel={onWheel}
               renderItem={(i) => {
                 const a = filtered[i]
+                const imgPath =
+                  a.preview_paths[0] ?? (IMAGE_EXTS.has(a.ext) ? a.path : null)
                 return (
                   <Card
                     key={a.id}
@@ -203,9 +206,9 @@ export function AssetLibrary() {
                     )}
                     onClick={() => setCurrentId(a.id)}
                   >
-                    {a.preview_paths[0] ? (
+                    {imgPath ? (
                       <Thumbnail
-                        path={a.preview_paths[0]}
+                        path={imgPath}
                         alt={a.name}
                         className="h-40 w-full object-cover"
                       />
