@@ -471,6 +471,39 @@ pub fn get_full_image(state: State<AppState>, path: String, max_px: u32) -> Resu
     }
 }
 
+/// 发起原生文件拖出（拖到资源管理器 / PS / Unity 等外部应用，效果同资源管理器拖拽）。
+/// 用 CF_HDROP 原始路径，兼容映射盘/UNC；必须在主线程执行（OLE + DoDragDrop 要求）。
+#[tauri::command]
+pub async fn start_drag(app: tauri::AppHandle, paths: Vec<String>) -> Result<(), String> {
+    let files: Vec<PathBuf> = paths
+        .into_iter()
+        .map(PathBuf::from)
+        .filter(|p| p.exists())
+        .collect();
+    if files.is_empty() {
+        return Err("没有可拖出的文件".into());
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = app;
+        return Err("拖出功能当前仅支持 Windows".into());
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let (tx, rx) = std::sync::mpsc::channel::<Result<(), String>>();
+        app.run_on_main_thread(move || {
+            let result = crate::drag::start_drag(files);
+            let _ = tx.send(result);
+        })
+        .map_err(|e| e.to_string())?;
+        rx.recv()
+            .map_err(|_| "拖拽被取消".to_string())
+            .and_then(|r| r)
+    }
+}
+
 /// 清除所有缩略图缓存
 #[tauri::command]
 pub fn clear_cache(state: State<AppState>) -> Result<(), String> {

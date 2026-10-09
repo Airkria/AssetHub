@@ -1,6 +1,6 @@
 [package]
 name = "asset-hub"
-version = "1.11.0"
+version = "1.12.0"
 description = "NAS 资产库索引与管理中枢"
 authors = ["you"]
 edition = "2021"
@@ -19,3 +19,16 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 ignore = "0.4"
 image = { version = "0.25", features = ["exr"] }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.52", features = [
+  "implement",
+  "Win32_Foundation",
+  "Win32_Graphics_Gdi",
+  "Win32_System_Com",
+  "Win32_System_Com_StructuredStorage",
+  "Win32_System_Memory",
+  "Win32_System_Ole",
+  "Win32_System_SystemServices",
+  "Win32_UI_Shell",
+] }

@@ -1,5 +1,7 @@
 mod commands;
 mod config;
+#[cfg(target_os = "windows")]
+mod drag;
 mod matcher;
 mod models;
 mod scanner;
@@ -60,6 +62,7 @@ pub fn run() {
             commands::list_rules_files,
             commands::get_thumbnail,
             commands::get_full_image,
+            commands::start_drag,
             commands::clear_cache
         ])
         .run(tauri::generate_context!())

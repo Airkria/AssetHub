@@ -86,7 +86,7 @@ export function Thumbnail({
   if (!src) {
     return <div className={cn("animate-pulse bg-muted", className)} onClick={onClick} />
   }
-  return <img src={src} alt={alt} className={className} onClick={onClick} />
+  return <img src={src} alt={alt} className={className} onClick={onClick} draggable={false} />
 }
 
 // 全尺寸图（放大预览用）：web 可解码的格式直读原图；tga/exr/hdr/dds/psd/tif 由后端按 zoom_max_px 解码
@@ -124,5 +124,5 @@ export function FullImage({
   if (!src) {
     return <div className={cn("animate-pulse bg-muted", className)} />
   }
-  return <img src={src} alt={alt} className={className} />
+  return <img src={src} alt={alt} className={className} draggable={false} />
 }

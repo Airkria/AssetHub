@@ -121,6 +121,11 @@ export function ArtDirection() {
                       "cursor-pointer overflow-hidden",
                       currentId === a.id && "ring-2 ring-ring",
                     )}
+                    draggable
+                    onDragStart={(e) => {
+                      e.preventDefault()
+                      api.startDrag([a.path])
+                    }}
                     onClick={() => setCurrentId(a.id)}
                     onContextMenu={(e) => {
                       e.preventDefault()
