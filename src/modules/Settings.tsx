@@ -36,7 +36,7 @@ import { Separator } from "@/components/ui/separator"
 import { useLibrary } from "@/store/LibraryContext"
 import { api, askConfirm, pickFile, pickFolder } from "@/api"
 import { cn } from "@/lib/utils"
-import type { MatchRules } from "@/types"
+import type { BoardConfig, MatchRules } from "@/types"
 
 const textareaClass =
   "flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
@@ -47,7 +47,7 @@ function deriveName(path: string) {
     .split(/[\\/]/)
     .filter(Boolean)
     .pop()
-  return seg || "资源库"
+  return seg || "板块"
 }
 
 // 全局匹配规则表单（分类 / 预览格式 / 预览后缀，不随库变）
@@ -94,7 +94,7 @@ type SectionKey = "lib" | "rules" | "preview" | "index"
 const KEYS: SectionKey[] = ["lib", "rules", "preview", "index"]
 
 const NAV: { key: SectionKey; label: string; icon: LucideIcon }[] = [
-  { key: "lib", label: "资产库设置", icon: FolderPlus },
+  { key: "lib", label: "板块", icon: FolderPlus },
   { key: "rules", label: "规则设置", icon: Filter },
   { key: "preview", label: "预览设置", icon: FileImage },
   { key: "index", label: "扫描索引", icon: FolderSearch },
@@ -107,6 +107,18 @@ const ZOOM_PRESETS = [
   { label: "3K", value: 3072 },
   { label: "4K", value: 4096 },
 ]
+
+// 板块显示方案
+const LAYOUTS = [
+  { key: "masonry", label: "瀑布流" },
+  { key: "grid", label: "卡片网格" },
+  { key: "drawer", label: "抽屉" },
+  { key: "tree", label: "树状" },
+  { key: "board", label: "随机板" },
+]
+
+// Pro 切割点：开通 Pro 后改为 false，锁定名称/显示方案自定义（当前默认解锁）
+const BOARD_CUSTOMIZABLE = true
 
 export function Settings({ onClose }: { onClose: () => void }) {
   const { config, setConfig } = useLibrary()
@@ -158,7 +170,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
       <div className="flex items-center justify-between border-b px-4 py-3">
         <div>
           <div className="text-base font-semibold">设置</div>
-          <div className="text-xs text-muted-foreground">配置资源库、匹配规则与预览</div>
+          <div className="text-xs text-muted-foreground">配置板块、匹配规则与预览</div>
         </div>
         <Button variant="ghost" size="icon" onClick={onClose}>
           <X className="h-4 w-4" />
@@ -186,7 +198,7 @@ export function Settings({ onClose }: { onClose: () => void }) {
         <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto p-6">
           <div className="space-y-6">
             <section ref={libRef} className="scroll-mt-6">
-              <LibSection />
+              <BoardSection />
             </section>
             <section ref={rulesRef} className="scroll-mt-6">
               <RulesSection form={form} setForm={setForm} />
@@ -254,179 +266,137 @@ export function SettingsModal({
   )
 }
 
-// —— 板块 1：资产库设置 ——
-function LibSection() {
-  const { libraries, activeLibrary, addLibrary, removeLibrary, config, setConfig, updateActiveLibrary } =
-    useLibrary()
+// —— 板块 1：板块 ——
+function BoardSection() {
+  const { config, addBoard } = useLibrary()
 
   const addViaPicker = async () => {
     const path = await pickFolder()
     if (!path) return
-    const files = await api.listRulesFiles(path)
-    if (files.length > 0) {
-      const use = await askConfirm(
-        `检测到 ${files.length} 个配置文件（${files[0]} 等），是否使用现有配置？`,
-        "发现配置文件",
-      )
-      if (use) {
-        const loaded = await api.loadRulesFile(`${path.replace(/[\\/]+$/, "")}\\${files[0]}`)
-        await setConfig({ ...config, match_rules: loaded })
-      }
-    }
-    await addLibrary(deriveName(path), path)
-  }
-
-  const clearCache = async () => {
-    const ok = await askConfirm("确定要清除所有缩略图缓存吗？下次预览会重新生成。", "清除缓存")
-    if (!ok) return
-    await api.clearCache()
+    await addBoard(deriveName(path), path)
   }
 
   return (
     <div className="space-y-4">
       <Card className="max-w-2xl">
         <CardHeader>
-          <CardTitle>资源库路径</CardTitle>
-          <CardDescription>可添加多个 NAS 路径，每个作为独立资源库切换查看</CardDescription>
+          <CardTitle>板块</CardTitle>
+          <CardDescription>每个板块 = 名称 + 文件夹 + 显示方案 + 可选过滤，自由组合成资产管理方案</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-2">
-          {libraries.length === 0 && (
+        <CardContent className="space-y-3">
+          {config.boards.length === 0 && (
             <p className="text-sm text-muted-foreground">
-              还没有资源库，点击下方「添加资源库」选择 NAS 文件夹
+              还没有板块，点击下方「添加板块」选择一个文件夹
             </p>
           )}
-          {libraries.map((lib) => (
-            <div key={lib.id} className="flex items-center gap-2 rounded-md border p-2">
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium">{lib.name}</div>
-                <div className="truncate text-xs text-muted-foreground">{lib.path}</div>
-              </div>
-              <Button variant="ghost" size="icon" onClick={() => removeLibrary(lib.id)}>
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
+          {config.boards.map((b) => (
+            <BoardEditor key={b.id} board={b} />
           ))}
           <Button variant="outline" onClick={addViaPicker}>
             <FolderPlus className="h-4 w-4" />
-            添加资源库
+            添加板块
           </Button>
         </CardContent>
-      </Card>
-
-      <ScanScopeCard key={activeLibrary?.id ?? "none"} />
-
-      <Card className="max-w-2xl">
-        <CardHeader>
-          <CardTitle>板块映射</CardTitle>
-          <CardDescription>美术设定 / 工具 / 教程 / 输出 对应的文件夹（每库独立）</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <FolderRow
-            label="美术设定文件夹"
-            value={activeLibrary?.art_folder ?? ""}
-            onPick={(p) => updateActiveLibrary({ art_folder: p })}
-            onClear={() => updateActiveLibrary({ art_folder: "" })}
-          />
-          <FolderRow
-            label="工具文件夹"
-            value={activeLibrary?.tools_folder ?? ""}
-            onPick={(p) => updateActiveLibrary({ tools_folder: p })}
-            onClear={() => updateActiveLibrary({ tools_folder: "" })}
-          />
-          <FolderRow
-            label="教程文件夹"
-            value={activeLibrary?.tutorial_folder ?? ""}
-            onPick={(p) => updateActiveLibrary({ tutorial_folder: p })}
-            onClear={() => updateActiveLibrary({ tutorial_folder: "" })}
-          />
-          <FolderRow
-            label="输出文件夹"
-            value={activeLibrary?.output_folder ?? ""}
-            onPick={(p) => updateActiveLibrary({ output_folder: p })}
-            onClear={() => updateActiveLibrary({ output_folder: "" })}
-          />
-        </CardContent>
-      </Card>
-
-      <Card className="max-w-2xl">
-        <CardHeader>
-          <CardTitle>缓存</CardTitle>
-          <CardDescription>缩略图缓存位置（建议放 SSD，默认在 C 盘应用数据目录）</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <FolderRow
-            label="缓存位置"
-            value={config.cache_dir}
-            onPick={(p) => setConfig({ ...config, cache_dir: p })}
-            onClear={() => setConfig({ ...config, cache_dir: "" })}
-          />
-          <p className="text-xs text-muted-foreground">
-            留空用默认位置；缓存超 5GB 自动清理最旧的缩略图
-          </p>
-        </CardContent>
-        <CardFooter className="justify-end">
-          <Button variant="destructive" size="sm" onClick={clearCache}>
-            <Trash2 className="h-4 w-4" />
-            清除缓存
-          </Button>
-        </CardFooter>
       </Card>
     </div>
   )
 }
 
-function ScanScopeCard() {
-  const { activeLibrary, updateActiveLibrary } = useLibrary()
-  const [include, setInclude] = useState(activeLibrary?.include_dirs.join("\n") ?? "")
-  const [exclude, setExclude] = useState(activeLibrary?.exclude_dirs.join("\n") ?? "")
+function BoardEditor({ board }: { board: BoardConfig }) {
+  const { config, setConfig, removeBoard } = useLibrary()
+  const [filterOn, setFilterOn] = useState(
+    board.include_dirs.length > 0 || board.exclude_dirs.length > 0,
+  )
+  const [include, setInclude] = useState(board.include_dirs.join("\n"))
+  const [exclude, setExclude] = useState(board.exclude_dirs.join("\n"))
 
-  const save = async () => {
-    if (!activeLibrary) return
-    await updateActiveLibrary({
+  const update = (patch: Partial<BoardConfig>) =>
+    setConfig({
+      ...config,
+      boards: config.boards.map((b) => (b.id === board.id ? { ...b, ...patch } : b)),
+    })
+
+  const pick = async () => {
+    const p = await pickFolder()
+    if (p) update({ folder: p })
+  }
+
+  const saveFilter = () =>
+    update({
       include_dirs: include.split("\n").map((s) => s.trim()).filter(Boolean),
       exclude_dirs: exclude.split("\n").map((s) => s.trim()).filter(Boolean),
     })
-  }
 
   return (
-    <Card className="max-w-2xl">
-      <CardHeader>
-        <CardTitle>扫描规则</CardTitle>
-        <CardDescription>当前资源库的扫描范围（每库独立，切换库时跟着变）</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div>
-          <label className="mb-1 block text-sm text-muted-foreground">
-            限制搜索的文件夹（相对库根，一行一个，留空 = 扫描全部）
-          </label>
+    <div className="space-y-2 rounded-md border p-3">
+      <div className="flex items-center gap-2">
+        <Input
+          value={board.name}
+          onChange={(e) => update({ name: e.target.value })}
+          placeholder="板块名"
+          disabled={!BOARD_CUSTOMIZABLE}
+          className="w-32"
+        />
+        <div className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+          {board.folder || "未设置路径"}
+        </div>
+        <Button size="sm" variant="outline" onClick={pick}>
+          选择
+        </Button>
+        {board.folder && (
+          <Button size="sm" variant="ghost" onClick={() => update({ folder: "" })}>
+            <X className="h-4 w-4" />
+          </Button>
+        )}
+        <select
+          value={board.layout}
+          onChange={(e) => update({ layout: e.target.value })}
+          disabled={!BOARD_CUSTOMIZABLE}
+          className="h-8 w-28 shrink-0 rounded-md border border-input bg-transparent px-2 text-sm"
+        >
+          {LAYOUTS.map((l) => (
+            <option key={l.key} value={l.key}>
+              {l.label}
+            </option>
+          ))}
+        </select>
+        <Button size="sm" variant="ghost" onClick={() => removeBoard(board.id)}>
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </div>
+
+      <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
+        <input
+          type="checkbox"
+          checked={filterOn}
+          onChange={(e) => setFilterOn(e.target.checked)}
+        />
+        启用过滤（只扫指定子目录，相对板块文件夹，一行一个）
+      </label>
+
+      {filterOn && (
+        <div className="space-y-2">
           <textarea
             className={textareaClass}
-            rows={3}
+            rows={2}
             value={include}
             onChange={(e) => setInclude(e.target.value)}
-            placeholder={"02_资产库\\Library\n03_工具库\\Tools"}
+            placeholder={"只扫的子目录，如 01_Textures\\A"}
           />
-        </div>
-        <div>
-          <label className="mb-1 block text-sm text-muted-foreground">
-            排除的文件夹（相对库根，一行一个）
-          </label>
           <textarea
             className={textareaClass}
             rows={2}
             value={exclude}
             onChange={(e) => setExclude(e.target.value)}
-            placeholder={"99_归档"}
+            placeholder={"排除的子目录，如 99_归档"}
           />
+          <Button size="sm" onClick={saveFilter}>
+            <Save className="h-4 w-4" />
+            保存过滤
+          </Button>
         </div>
-      </CardContent>
-      <CardFooter>
-        <Button onClick={save}>
-          <Save className="h-4 w-4" />
-          保存扫描范围
-        </Button>
-      </CardFooter>
-    </Card>
+      )}
+    </div>
   )
 }
 
@@ -571,6 +541,12 @@ function PreviewSection({
 }) {
   const { config, setConfig } = useLibrary()
 
+  const clearCache = async () => {
+    const ok = await askConfirm("确定要清除所有缩略图缓存吗？下次预览会重新生成。", "清除缓存")
+    if (!ok) return
+    await api.clearCache()
+  }
+
   return (
     <div className="space-y-4">
       <Card className="max-w-2xl">
@@ -624,6 +600,30 @@ function PreviewSection({
             tga / exr / hdr / dds / psd 等 webview 无法解码的格式，由后端按此档位解码放大图
           </p>
         </CardContent>
+      </Card>
+
+      <Card className="max-w-2xl">
+        <CardHeader>
+          <CardTitle>缓存</CardTitle>
+          <CardDescription>缩略图缓存位置（建议放 SSD，默认在 C 盘应用数据目录）</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <FolderRow
+            label="缓存位置"
+            value={config.cache_dir}
+            onPick={(p) => setConfig({ ...config, cache_dir: p })}
+            onClear={() => setConfig({ ...config, cache_dir: "" })}
+          />
+          <p className="text-xs text-muted-foreground">
+            留空用默认位置；缓存超 5GB 自动清理最旧的缩略图
+          </p>
+        </CardContent>
+        <CardFooter className="justify-end">
+          <Button variant="destructive" size="sm" onClick={clearCache}>
+            <Trash2 className="h-4 w-4" />
+            清除缓存
+          </Button>
+        </CardFooter>
       </Card>
     </div>
   )
@@ -778,7 +778,7 @@ function IndexSection() {
         ) : (
           <Button onClick={startScan}>
             <FolderSearch className="h-4 w-4" />
-            扫描当前资源库
+            扫描当前板块
           </Button>
         )}
         {error && <p className="text-sm text-destructive">{error}</p>}

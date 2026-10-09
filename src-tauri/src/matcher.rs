@@ -1,9 +1,9 @@
 use std::path::Path;
 
-use crate::models::{CategoryRule, Library};
+use crate::models::{BoardConfig, CategoryRule};
 
-impl Library {
-    /// 判断某文件（相对库根的路径）是否在扫描范围内。
+impl BoardConfig {
+    /// 判断某文件（相对板块文件夹的路径）是否在扫描范围内。
     pub fn is_included(&self, rel: &Path) -> bool {
         let rel = rel.to_string_lossy().replace('\\', "/");
 

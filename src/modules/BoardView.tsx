@@ -1,10 +1,9 @@
 import { useMemo, useState, type MouseEvent as ReactMouseEvent } from "react"
-import { Search, FolderOpen, LayoutGrid, Tags } from "lucide-react"
+import { Search, FolderOpen } from "lucide-react"
 import { ModuleHeader } from "@/components/layout/module-header"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { VirtualGrid } from "@/components/VirtualGrid"
 import { Thumbnail, FullImage } from "@/components/Thumbnail"
 import { ContextMenu } from "@/components/ContextMenu"
@@ -13,11 +12,10 @@ import { Separator } from "@/components/ui/separator"
 import { TagEditor } from "@/components/TagEditor"
 import { useLibrary } from "@/store/LibraryContext"
 import { api, askConfirm } from "@/api"
-import { inFolder } from "@/lib/path"
 import { IMAGE_EXTS } from "@/lib/formats"
 import { cn } from "@/lib/utils"
 import { useThumbSize } from "@/hooks/useThumbSize"
-import type { Asset } from "@/types"
+import type { Asset, BoardConfig } from "@/types"
 
 const FALLBACKS = [
   "from-slate-600 to-slate-800",
@@ -34,67 +32,27 @@ function fallbackGradient(id: string) {
   return FALLBACKS[h % FALLBACKS.length]
 }
 
-export function AssetLibrary() {
-  const { assets, activeLibrary, updateMetadata, deleteAsset } = useLibrary()
-  const artFolder = activeLibrary?.art_folder ?? ""
-  const toolsFolder = activeLibrary?.tools_folder ?? ""
-  const tutorialFolder = activeLibrary?.tutorial_folder ?? ""
-  const outputFolder = activeLibrary?.output_folder ?? ""
+export function BoardView({ board }: { board: BoardConfig }) {
+  const { assets, updateMetadata, deleteAsset } = useLibrary()
   const { cols, setCols, onWheel } = useThumbSize(3)
-  const [mode, setMode] = useState<"category" | "tag">("category")
-  const [category, setCategory] = useState("全部")
-  const [tag, setTag] = useState("全部")
   const [query, setQuery] = useState("")
   const [currentId, setCurrentId] = useState<string | null>(null)
   const [detailWidth, setDetailWidth] = useState(288)
   const [menu, setMenu] = useState<{ x: number; y: number; asset: Asset } | null>(null)
 
-  const mainAssets = useMemo(
-    () =>
-      assets.filter((a) => {
-        if (a.is_preview) return false
-        if (artFolder && inFolder(a.path, artFolder)) return false
-        if (toolsFolder && inFolder(a.path, toolsFolder)) return false
-        if (tutorialFolder && inFolder(a.path, tutorialFolder)) return false
-        if (outputFolder && inFolder(a.path, outputFolder)) return false
-        return true
-      }),
-    [assets, artFolder, toolsFolder, tutorialFolder, outputFolder],
-  )
-
-  const categories = useMemo(() => {
-    const s = new Set<string>()
-    for (const a of mainAssets) if (a.category) s.add(a.category)
-    return ["全部", ...Array.from(s).sort()]
-  }, [mainAssets])
-
-  const tags = useMemo(() => {
-    const s = new Set<string>()
-    for (const a of mainAssets) for (const t of a.tags) s.add(t)
-    return ["全部", ...Array.from(s).sort()]
-  }, [mainAssets])
-
   const filtered = useMemo(() => {
-    return mainAssets.filter((a) => {
-      if (query) {
-        const q = query.toLowerCase()
-        const hit =
-          a.name.toLowerCase().includes(q) ||
-          a.tags.some((t) => t.toLowerCase().includes(q))
-        if (!hit) return false
-      }
-      if (mode === "category") {
-        if (category !== "全部" && a.category !== category) return false
-      } else {
-        if (tag !== "全部" && !a.tags.includes(tag)) return false
-      }
-      return true
-    })
-  }, [mainAssets, mode, category, tag, query])
+    if (!query) return assets
+    const q = query.toLowerCase()
+    return assets.filter(
+      (a) =>
+        a.name.toLowerCase().includes(q) ||
+        a.tags.some((t) => t.toLowerCase().includes(q)),
+    )
+  }, [assets, query])
 
   const current = useMemo(
-    () => mainAssets.find((a) => a.id === currentId) ?? null,
-    [mainAssets, currentId],
+    () => assets.find((a) => a.id === currentId) ?? null,
+    [assets, currentId],
   )
 
   const startDrag = (e: ReactMouseEvent<HTMLDivElement>) => {
@@ -113,7 +71,7 @@ export function AssetLibrary() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <ModuleHeader title="资产库" description="浏览、搜索、拿取素材">
+      <ModuleHeader title={board.name} description={board.folder}>
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -126,54 +84,6 @@ export function AssetLibrary() {
       </ModuleHeader>
 
       <div className="flex min-h-0 flex-1">
-        <aside className="w-48 shrink-0 border-r p-3">
-          <div className="mb-2 flex gap-1">
-            <Button
-              size="sm"
-              variant={mode === "category" ? "secondary" : "ghost"}
-              className="flex-1"
-              onClick={() => setMode("category")}
-            >
-              <LayoutGrid className="h-4 w-4" />
-              类别
-            </Button>
-            <Button
-              size="sm"
-              variant={mode === "tag" ? "secondary" : "ghost"}
-              className="flex-1"
-              onClick={() => setMode("tag")}
-            >
-              <Tags className="h-4 w-4" />
-              标签
-            </Button>
-          </div>
-          <ScrollArea className="h-full">
-            <div className="space-y-0.5">
-              {(mode === "category" ? categories : tags).map((c) => (
-                <button
-                  key={c}
-                  onClick={() => (mode === "category" ? setCategory(c) : setTag(c))}
-                  className={cn(
-                    "flex w-full items-center justify-between rounded-md px-2 py-1.5 text-sm",
-                    (mode === "category" ? category : tag) === c
-                      ? "bg-accent text-accent-foreground"
-                      : "hover:bg-muted",
-                  )}
-                >
-                  <span className="truncate">{c}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {c === "全部"
-                      ? mainAssets.length
-                      : mode === "category"
-                        ? mainAssets.filter((a) => a.category === c).length
-                        : mainAssets.filter((a) => a.tags.includes(c)).length}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </ScrollArea>
-        </aside>
-
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex items-center justify-end border-b px-4 py-2">
             <input
@@ -190,7 +100,7 @@ export function AssetLibrary() {
           {filtered.length === 0 ? (
             <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
               <p>暂无资产</p>
-              <p className="mt-1 text-xs">请先在「设置」中配置资源库并扫描</p>
+              <p className="mt-1 text-xs">请在「设置 → 显示设置」配置板块并扫描</p>
             </div>
           ) : (
             <VirtualGrid
@@ -259,11 +169,7 @@ export function AssetLibrary() {
           className="shrink-0 border-l bg-card p-4"
         >
           {current ? (
-            <AssetDetail
-              asset={current}
-              suggested={tags.filter((t) => t !== "全部")}
-              onUpdate={updateMetadata}
-            />
+            <AssetDetail asset={current} onUpdate={updateMetadata} />
           ) : (
             <p className="text-sm text-muted-foreground">点击左侧资产查看详情</p>
           )}
@@ -304,11 +210,9 @@ export function AssetLibrary() {
 
 function AssetDetail({
   asset,
-  suggested,
   onUpdate,
 }: {
   asset: Asset
-  suggested: string[]
   onUpdate: (id: string, patch: { tags?: string[] }) => Promise<void>
 }) {
   const [imgIdx, setImgIdx] = useState(0)
@@ -365,7 +269,7 @@ function AssetDetail({
         <div className="mb-1 text-xs text-muted-foreground">标签</div>
         <TagEditor
           tags={asset.tags}
-          suggested={suggested}
+          suggested={[]}
           onChange={(tags) => onUpdate(asset.id, { tags })}
         />
       </div>

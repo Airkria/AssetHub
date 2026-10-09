@@ -1,21 +1,10 @@
-export type ModuleKey =
-  | "art-direction"
-  | "asset-search"
-  | "tools"
-  | "tutorial"
-  | "output"
-  | "settings"
-
-export interface Library {
+export interface BoardConfig {
   id: string
   name: string
-  path: string
+  folder: string
   include_dirs: string[]
   exclude_dirs: string[]
-  art_folder: string
-  tools_folder: string
-  tutorial_folder: string
-  output_folder: string
+  layout: string
 }
 
 export interface CategoryRule {
@@ -37,8 +26,7 @@ export interface MatchRules {
 }
 
 export interface Config {
-  libraries: Library[]
-  active_library_id: string | null
+  boards: BoardConfig[]
   match_rules: MatchRules
   cache_dir: string
   zoom_max_px: number

@@ -44,9 +44,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_config,
             commands::set_config,
-            commands::add_library,
-            commands::remove_library,
-            commands::set_active_library,
+            commands::add_board,
+            commands::remove_board,
             commands::start_scan,
             commands::cancel_scan,
             commands::pause_scan,

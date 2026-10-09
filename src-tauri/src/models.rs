@@ -1,29 +1,25 @@
 use serde::{Deserialize, Serialize};
 
-/// 一个独立的资源库（对应一个 NAS 路径）
+/// 板块（资产管理的核心单元）：名称 + 文件夹 + 扫描过滤 + 显示方案
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Library {
+pub struct BoardConfig {
     pub id: String,
     pub name: String,
-    pub path: String,
-    /// 限制搜索的文件夹（相对库根，空 = 扫描全部）
+    /// 板块文件夹（绝对路径）
+    pub folder: String,
+    /// 只扫这些子目录（相对 folder，空 = 全扫）
     #[serde(default)]
     pub include_dirs: Vec<String>,
-    /// 排除的文件夹
+    /// 排除这些子目录（相对 folder）
     #[serde(default)]
     pub exclude_dirs: Vec<String>,
-    /// 美术设定文件夹（绝对路径）
-    #[serde(default)]
-    pub art_folder: String,
-    /// 工具文件夹（绝对路径）
-    #[serde(default)]
-    pub tools_folder: String,
-    /// 教程文件夹（绝对路径）
-    #[serde(default)]
-    pub tutorial_folder: String,
-    /// 输出文件夹（绝对路径）
-    #[serde(default)]
-    pub output_folder: String,
+    /// "masonry" | "grid" | "drawer" | "tree" | "board"
+    #[serde(default = "default_layout")]
+    pub layout: String,
+}
+
+fn default_layout() -> String {
+    "masonry".into()
 }
 
 /// 扩展名 → 分类 的规则
@@ -41,7 +37,7 @@ pub struct FormatFamily {
     pub extensions: Vec<String>,
 }
 
-/// 全局共享的匹配规则（分类 / 预览格式 / 预览图后缀），不随库变。
+/// 全局共享的匹配规则（分类 / 预览格式 / 预览后缀 / 共识标签），不随板块变。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MatchRules {
     #[serde(default = "default_preview_suffixes")]
@@ -50,7 +46,6 @@ pub struct MatchRules {
     pub category_rules: Vec<CategoryRule>,
     #[serde(default = "default_format_families")]
     pub format_families: Vec<FormatFamily>,
-    /// 共识标签词表（团队共享，随配置文件同步）
     #[serde(default)]
     pub tag_vocabulary: Vec<String>,
 }
@@ -147,9 +142,7 @@ impl Default for MatchRules {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     #[serde(default)]
-    pub libraries: Vec<Library>,
-    #[serde(default)]
-    pub active_library_id: Option<String>,
+    pub boards: Vec<BoardConfig>,
     #[serde(default)]
     pub match_rules: MatchRules,
     /// 缩略图缓存位置（空 = 用默认应用数据目录）
@@ -167,8 +160,7 @@ fn default_zoom_max_px() -> u32 {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            libraries: vec![],
-            active_library_id: None,
+            boards: vec![],
             match_rules: MatchRules::default(),
             cache_dir: String::new(),
             zoom_max_px: default_zoom_max_px(),

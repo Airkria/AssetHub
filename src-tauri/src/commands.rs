@@ -6,7 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
 
-use crate::models::{Asset, Config, Library, MatchRules};
+use crate::models::{Asset, BoardConfig, Config, MatchRules};
 use crate::{config, scanner, store, AppState};
 
 #[derive(Clone, Serialize)]
@@ -25,13 +25,13 @@ struct ScanError {
     message: String,
 }
 
-/// 取某库的根路径（用于定位库根下的 meta.json）。
-fn lib_root(state: &AppState, lib_id: &str) -> Option<PathBuf> {
+/// 取某板块的文件夹路径（用于定位板块文件夹下的 meta.json）。
+fn board_folder(state: &AppState, board_id: &str) -> Option<PathBuf> {
     let cfg = state.config.lock().unwrap();
-    cfg.libraries
+    cfg.boards
         .iter()
-        .find(|l| l.id == lib_id)
-        .map(|l| PathBuf::from(&l.path))
+        .find(|b| b.id == board_id)
+        .map(|b| PathBuf::from(&b.folder))
 }
 
 #[tauri::command]
@@ -46,87 +46,58 @@ pub fn set_config(state: State<AppState>, cfg: Config) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn add_library(state: State<AppState>, name: String, path: String) -> Result<Library, String> {
+pub fn add_board(state: State<AppState>, name: String, folder: String) -> Result<BoardConfig, String> {
     let mut cfg = state.config.lock().unwrap().clone();
     let id = format!(
-        "lib-{}",
+        "board-{}",
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_millis())
             .unwrap_or(0)
     );
-    let lib = Library {
+    let board = BoardConfig {
         id: id.clone(),
         name,
-        path,
+        folder,
         include_dirs: vec![],
         exclude_dirs: vec![],
-        art_folder: String::new(),
-        tools_folder: String::new(),
-        tutorial_folder: String::new(),
-        output_folder: String::new(),
+        layout: "masonry".into(),
     };
-    cfg.libraries.push(lib.clone());
-    if cfg.active_library_id.is_none() {
-        cfg.active_library_id = Some(id);
-    }
+    cfg.boards.push(board.clone());
     config::save(&state.app_data_dir, &cfg)?;
     *state.config.lock().unwrap() = cfg;
-    Ok(lib)
+    Ok(board)
 }
 
 #[tauri::command]
-pub fn remove_library(state: State<AppState>, id: String) -> Result<(), String> {
+pub fn remove_board(state: State<AppState>, id: String) -> Result<(), String> {
     let mut cfg = state.config.lock().unwrap().clone();
-    cfg.libraries.retain(|l| l.id != id);
-    if cfg.active_library_id.as_deref() == Some(id.as_str()) {
-        cfg.active_library_id = cfg.libraries.first().map(|l| l.id.clone());
-    }
+    cfg.boards.retain(|b| b.id != id);
     config::save(&state.app_data_dir, &cfg)?;
     *state.config.lock().unwrap() = cfg;
     store::remove(&state.app_data_dir, &id);
     Ok(())
 }
 
-#[tauri::command]
-pub fn set_active_library(state: State<AppState>, id: String) -> Result<(), String> {
-    let mut cfg = state.config.lock().unwrap().clone();
-    cfg.active_library_id = Some(id);
-    config::save(&state.app_data_dir, &cfg)?;
-    *state.config.lock().unwrap() = cfg;
-    Ok(())
-}
-
 /// 启动后台扫描（立即返回），进度/完成/取消通过事件回报。
 #[tauri::command]
-pub fn start_scan(app: AppHandle, state: State<AppState>, lib_id: String) -> Result<(), String> {
+pub fn start_scan(app: AppHandle, state: State<AppState>, board_id: String) -> Result<(), String> {
     if state.scanning_flag.load(Ordering::SeqCst) {
         return Err("正在扫描中".into());
     }
     let cfg = state.config.lock().unwrap().clone();
-    let lib = cfg
-        .libraries
+    let board = cfg
+        .boards
         .iter()
-        .find(|l| l.id == lib_id)
-        .ok_or("库不存在")?
+        .find(|b| b.id == board_id)
+        .ok_or("板块不存在")?
         .clone();
-    let root = PathBuf::from(&lib.path);
-    if !root.exists() {
-        return Err(format!("路径不存在: {}", lib.path));
+    let folder = PathBuf::from(&board.folder);
+    if !folder.exists() {
+        return Err(format!("路径不存在: {}", board.folder));
     }
 
     let rules = cfg.match_rules.clone();
-    // 板块映射文件夹（绝对路径，可跨盘），作为额外扫描根
-    let extra_dirs: Vec<String> = [
-        lib.art_folder.clone(),
-        lib.tools_folder.clone(),
-        lib.tutorial_folder.clone(),
-        lib.output_folder.clone(),
-    ]
-    .into_iter()
-    .map(|s| s.trim().to_string())
-    .filter(|s| !s.is_empty())
-    .collect();
     let app_data_dir = state.app_data_dir.clone();
     let cancel = state.cancel_flag.clone();
     let pause = state.pause_flag.clone();
@@ -137,7 +108,7 @@ pub fn start_scan(app: AppHandle, state: State<AppState>, lib_id: String) -> Res
     state.pause_flag.store(false, Ordering::SeqCst);
 
     std::thread::spawn(move || {
-        run_scan(app, lib_id, root, lib, rules, extra_dirs, app_data_dir, cancel, pause, scanning);
+        run_scan(app, board_id, folder, board, rules, app_data_dir, cancel, pause, scanning);
     });
 
     Ok(())
@@ -145,17 +116,16 @@ pub fn start_scan(app: AppHandle, state: State<AppState>, lib_id: String) -> Res
 
 fn run_scan(
     app: AppHandle,
-    lib_id: String,
-    root: PathBuf,
-    lib: Library,
+    board_id: String,
+    folder: PathBuf,
+    board: BoardConfig,
     rules: MatchRules,
-    extra_dirs: Vec<String>,
     app_data_dir: PathBuf,
     cancel: Arc<AtomicBool>,
     pause: Arc<AtomicBool>,
     scanning: Arc<AtomicBool>,
 ) {
-    let result = scanner::scan(&root, &lib, &rules, &extra_dirs, &cancel, &pause, |count, dir| {
+    let result = scanner::scan(&folder, &board, &rules, &cancel, &pause, |count, dir| {
         let _ = app.emit(
             "scan://progress",
             ScanProgress {
@@ -169,8 +139,8 @@ fn run_scan(
         Ok(Some(mut assets)) => {
             let count = assets.len();
             // 增量：保留未变文件的用户元数据（标签/说明/链接），避免重扫清空标注
-            merge_metadata(&mut assets, &root, &store::load(&app_data_dir, &lib_id));
-            match store::save(&app_data_dir, &lib_id, &assets) {
+            merge_metadata(&mut assets, &folder, &store::load(&app_data_dir, &board_id));
+            match store::save(&app_data_dir, &board_id, &assets) {
                 Ok(()) => {
                     let _ = app.emit("scan://done", ScanDone { count });
                 }
@@ -195,7 +165,7 @@ pub fn cancel_scan(state: State<AppState>) {
 }
 
 /// 增量：先兜底旧索引里的历史标注，再用 meta.json（权威源）覆盖。
-fn merge_metadata(new_assets: &mut [Asset], lib_root: &Path, old_assets: &[Asset]) {
+fn merge_metadata(new_assets: &mut [Asset], folder: &Path, old_assets: &[Asset]) {
     let old: std::collections::HashMap<&str, &Asset> =
         old_assets.iter().map(|a| (a.id.as_str(), a)).collect();
     for a in new_assets.iter_mut() {
@@ -206,7 +176,7 @@ fn merge_metadata(new_assets: &mut [Asset], lib_root: &Path, old_assets: &[Asset
             a.edited = o.edited;
         }
     }
-    let meta = crate::meta::load(lib_root);
+    let meta = crate::meta::load(folder);
     crate::meta::apply(new_assets, &meta);
 }
 
@@ -221,9 +191,9 @@ pub fn resume_scan(state: State<AppState>) {
 }
 
 #[tauri::command]
-pub fn list_assets(state: State<AppState>, lib_id: String) -> Vec<Asset> {
-    let mut assets = store::load(&state.app_data_dir, &lib_id);
-    if let Some(root) = lib_root(&state, &lib_id) {
+pub fn list_assets(state: State<AppState>, board_id: String) -> Vec<Asset> {
+    let mut assets = store::load(&state.app_data_dir, &board_id);
+    if let Some(root) = board_folder(&state, &board_id) {
         let meta = crate::meta::load(&root);
         crate::meta::apply(&mut assets, &meta);
     }
@@ -233,22 +203,22 @@ pub fn list_assets(state: State<AppState>, lib_id: String) -> Vec<Asset> {
 #[tauri::command]
 pub fn update_asset(
     state: State<AppState>,
-    lib_id: String,
+    board_id: String,
     id: String,
     tags: Vec<String>,
     description: String,
     link: String,
 ) -> Result<(), String> {
-    let mut assets = store::load(&state.app_data_dir, &lib_id);
+    let mut assets = store::load(&state.app_data_dir, &board_id);
     if let Some(a) = assets.iter_mut().find(|a| a.id == id) {
         a.tags = tags.clone();
         a.description = description.clone();
         a.link = link.clone();
         a.edited = true;
     }
-    store::save(&state.app_data_dir, &lib_id, &assets)?;
+    store::save(&state.app_data_dir, &board_id, &assets)?;
     // 写入权威源 meta.json
-    if let Some(root) = lib_root(&state, &lib_id) {
+    if let Some(root) = board_folder(&state, &board_id) {
         crate::meta::set_entry(&root, &id, tags, description, link)?;
     }
     Ok(())
@@ -257,11 +227,11 @@ pub fn update_asset(
 #[tauri::command]
 pub fn rename_asset(
     state: State<AppState>,
-    lib_id: String,
+    board_id: String,
     id: String,
     new_stem: String,
 ) -> Result<Asset, String> {
-    let mut assets = store::load(&state.app_data_dir, &lib_id);
+    let mut assets = store::load(&state.app_data_dir, &board_id);
     let (old_path, ext) = {
         let a = assets.iter().find(|a| a.id == id).ok_or("资产不存在")?;
         (std::path::PathBuf::from(&a.path), a.ext.clone())
@@ -300,8 +270,8 @@ pub fn rename_asset(
             updated = Some(a.clone());
         }
     }
-    store::save(&state.app_data_dir, &lib_id, &assets)?;
-    if let Some(root) = lib_root(&state, &lib_id) {
+    store::save(&state.app_data_dir, &board_id, &assets)?;
+    if let Some(root) = board_folder(&state, &board_id) {
         crate::meta::rename_entry(&root, &id, &new_id)?;
     }
     updated.ok_or("更新失败".into())
@@ -310,18 +280,18 @@ pub fn rename_asset(
 #[tauri::command]
 pub fn delete_asset(
     state: State<AppState>,
-    lib_id: String,
+    board_id: String,
     id: String,
 ) -> Result<(), String> {
-    let mut assets = store::load(&state.app_data_dir, &lib_id);
+    let mut assets = store::load(&state.app_data_dir, &board_id);
     let path = {
         let a = assets.iter().find(|a| a.id == id).ok_or("资产不存在")?;
         a.path.clone()
     };
     std::fs::remove_file(&path).map_err(|e| e.to_string())?;
     assets.retain(|a| a.id != id);
-    store::save(&state.app_data_dir, &lib_id, &assets)?;
-    if let Some(root) = lib_root(&state, &lib_id) {
+    store::save(&state.app_data_dir, &board_id, &assets)?;
+    if let Some(root) = board_folder(&state, &board_id) {
         crate::meta::remove_entry(&root, &id)?;
     }
     Ok(())

@@ -1,6 +1,6 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core"
 import { open, ask } from "@tauri-apps/plugin-dialog"
-import type { Asset, Config, Library, MatchRules } from "@/types"
+import type { Asset, BoardConfig, Config, MatchRules } from "@/types"
 
 // 是否运行在 Tauri 桌面壳内（浏览器预览模式为 false）
 export const isTauri =
@@ -14,28 +14,27 @@ export const api = {
   isTauri,
   getConfig: () => call<Config>("get_config"),
   setConfig: (cfg: Config) => call<void>("set_config", { cfg }),
-  addLibrary: (name: string, path: string) =>
-    call<Library>("add_library", { name, path }),
-  removeLibrary: (id: string) => call<void>("remove_library", { id }),
-  setActiveLibrary: (id: string) => call<void>("set_active_library", { id }),
-  startScan: (libId: string) => call<void>("start_scan", { libId }),
+  addBoard: (name: string, folder: string) =>
+    call<BoardConfig>("add_board", { name, folder }),
+  removeBoard: (id: string) => call<void>("remove_board", { id }),
+  startScan: (boardId: string) => call<void>("start_scan", { boardId }),
   cancelScan: () => call<void>("cancel_scan"),
   pauseScan: () => call<void>("pause_scan"),
   resumeScan: () => call<void>("resume_scan"),
-  listAssets: (libId: string) => call<Asset[]>("list_assets", { libId }),
+  listAssets: (boardId: string) => call<Asset[]>("list_assets", { boardId }),
   updateAsset: (
-    libId: string,
+    boardId: string,
     id: string,
     tags: string[],
     description: string,
     link: string,
-  ) => call<void>("update_asset", { libId, id, tags, description, link }),
-  renameAsset: (libId: string, id: string, newStem: string) =>
-    call<Asset>("rename_asset", { libId, id, newStem }),
-  deleteAsset: (libId: string, id: string) => call<void>("delete_asset", { libId, id }),
+  ) => call<void>("update_asset", { boardId, id, tags, description, link }),
+  renameAsset: (boardId: string, id: string, newStem: string) =>
+    call<Asset>("rename_asset", { boardId, id, newStem }),
+  deleteAsset: (boardId: string, id: string) =>
+    call<void>("delete_asset", { boardId, id }),
   openUrl: (url: string) => call<void>("open_url", { url }),
   revealInFolder: (path: string) => call<void>("reveal_in_folder", { path }),
-  checkPath: (path: string) => call<boolean>("check_path", { path }),
   getThumbnail: (path: string) => call<string>("get_thumbnail", { path }),
   getFullImage: (path: string, maxPx: number) =>
     call<string>("get_full_image", { path, maxPx }),
