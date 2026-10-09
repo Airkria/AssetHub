@@ -29,7 +29,7 @@ export default function App() {
       <Sidebar settingsOpen={settingsOpen} onToggleSettings={toggleSettings} />
       <main className="flex min-w-0 flex-1 flex-col">
         {activeBoard ? (
-          <BoardView board={activeBoard} />
+          <BoardView key={activeBoard.id} board={activeBoard} />
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
             <p>还没有板块</p>

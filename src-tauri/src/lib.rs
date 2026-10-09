@@ -2,6 +2,8 @@ mod commands;
 mod config;
 #[cfg(target_os = "windows")]
 mod drag;
+#[cfg(target_os = "windows")]
+mod icon;
 mod matcher;
 mod meta;
 mod models;
@@ -62,6 +64,7 @@ pub fn run() {
             commands::list_rules_files,
             commands::get_thumbnail,
             commands::get_full_image,
+            commands::get_file_icon,
             commands::start_drag,
             commands::clear_cache
         ])

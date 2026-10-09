@@ -89,6 +89,39 @@ export function Thumbnail({
   return <img src={src} alt={alt} className={className} onClick={onClick} draggable={false} />
 }
 
+// 文件关联图标（exe 等非图片文件）：后端提取系统图标，前端缓存
+const iconCache = new Map<string, string>()
+
+export function FileIcon({ path, className }: { path: string; className?: string }) {
+  const [src, setSrc] = useState<string | null>(() => iconCache.get(path) ?? null)
+
+  useEffect(() => {
+    let mounted = true
+    const hit = iconCache.get(path)
+    if (hit) {
+      setSrc(hit)
+      return
+    }
+    api
+      .getFileIcon(path)
+      .then((p) => {
+        if (!p) return
+        const url = assetUrl(p)
+        iconCache.set(path, url)
+        if (mounted) setSrc(url)
+      })
+      .catch(() => {})
+    return () => {
+      mounted = false
+    }
+  }, [path])
+
+  if (!src) {
+    return <div className={cn("bg-muted", className)} />
+  }
+  return <img src={src} className={cn("object-contain", className)} />
+}
+
 // 全尺寸图（放大预览用）：web 可解码的格式直读原图；tga/exr/hdr/dds/psd/tif 由后端按 zoom_max_px 解码
 export function FullImage({
   path,

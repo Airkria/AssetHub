@@ -455,6 +455,44 @@ pub fn get_full_image(state: State<AppState>, path: String, max_px: u32) -> Resu
     }
 }
 
+/// 提取文件关联图标（缓存 PNG），用于详情/工具视图展示 exe 图标。
+#[tauri::command]
+pub fn get_file_icon(state: State<AppState>, path: String) -> Result<String, String> {
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (state, path);
+        return Ok(String::new());
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let cache_dir = {
+            let cfg = state.config.lock().unwrap();
+            if cfg.cache_dir.trim().is_empty() {
+                state.app_data_dir.join("thumbnails")
+            } else {
+                PathBuf::from(&cfg.cache_dir)
+            }
+        };
+        let icon_dir = cache_dir.join("icons");
+        std::fs::create_dir_all(&icon_dir).map_err(|e| e.to_string())?;
+
+        let key = {
+            use std::hash::{Hash, Hasher};
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            path.hash(&mut h);
+            format!("{:016x}", h.finish())
+        };
+        let icon_path = icon_dir.join(format!("{}.png", key));
+        if icon_path.exists() {
+            return Ok(icon_path.to_string_lossy().to_string());
+        }
+
+        let png = crate::icon::get_file_icon(&path, 64)?;
+        std::fs::write(&icon_path, png).map_err(|e| e.to_string())?;
+        Ok(icon_path.to_string_lossy().to_string())
+    }
+}
+
 /// 发起原生文件拖出（拖到资源管理器 / PS / Unity 等外部应用，效果同资源管理器拖拽）。
 /// 用 CF_HDROP 原始路径，兼容映射盘/UNC；必须在主线程执行（OLE + DoDragDrop 要求）。
 #[tauri::command]

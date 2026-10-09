@@ -112,9 +112,9 @@ const ZOOM_PRESETS = [
 const LAYOUTS = [
   { key: "masonry", label: "瀑布流" },
   { key: "grid", label: "卡片网格" },
-  { key: "drawer", label: "抽屉" },
   { key: "tree", label: "树状" },
-  { key: "board", label: "随机板" },
+  { key: "detail", label: "详情" },
+  { key: "board", label: "随机板（占位）" },
 ]
 
 // Pro 切割点：开通 Pro 后改为 false，锁定名称/显示方案自定义（当前默认解锁）

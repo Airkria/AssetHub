@@ -38,6 +38,7 @@ export const api = {
   getThumbnail: (path: string) => call<string>("get_thumbnail", { path }),
   getFullImage: (path: string, maxPx: number) =>
     call<string>("get_full_image", { path, maxPx }),
+  getFileIcon: (path: string) => call<string>("get_file_icon", { path }),
   startDrag: (paths: string[]) => call<void>("start_drag", { paths }),
   clearCache: () => call<void>("clear_cache"),
   saveRulesFile: (path: string, rules: MatchRules) =>
