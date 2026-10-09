@@ -6,12 +6,13 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { VirtualGrid } from "@/components/VirtualGrid"
-import { Thumbnail } from "@/components/Thumbnail"
+import { Thumbnail, FullImage } from "@/components/Thumbnail"
+import { ContextMenu } from "@/components/ContextMenu"
 import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { TagEditor } from "@/components/TagEditor"
 import { useLibrary } from "@/store/LibraryContext"
-import { api } from "@/api"
+import { api, askConfirm } from "@/api"
 import { inFolder } from "@/lib/path"
 import { IMAGE_EXTS } from "@/lib/formats"
 import { cn } from "@/lib/utils"
@@ -34,9 +35,11 @@ function fallbackGradient(id: string) {
 }
 
 export function AssetLibrary() {
-  const { assets, activeLibrary, updateMetadata } = useLibrary()
+  const { assets, activeLibrary, updateMetadata, deleteAsset } = useLibrary()
   const artFolder = activeLibrary?.art_folder ?? ""
   const toolsFolder = activeLibrary?.tools_folder ?? ""
+  const tutorialFolder = activeLibrary?.tutorial_folder ?? ""
+  const outputFolder = activeLibrary?.output_folder ?? ""
   const { cols, setCols, onWheel } = useThumbSize(3)
   const [mode, setMode] = useState<"category" | "tag">("category")
   const [category, setCategory] = useState("全部")
@@ -44,6 +47,7 @@ export function AssetLibrary() {
   const [query, setQuery] = useState("")
   const [currentId, setCurrentId] = useState<string | null>(null)
   const [detailWidth, setDetailWidth] = useState(288)
+  const [menu, setMenu] = useState<{ x: number; y: number; asset: Asset } | null>(null)
 
   const mainAssets = useMemo(
     () =>
@@ -51,9 +55,11 @@ export function AssetLibrary() {
         if (a.is_preview) return false
         if (artFolder && inFolder(a.path, artFolder)) return false
         if (toolsFolder && inFolder(a.path, toolsFolder)) return false
+        if (tutorialFolder && inFolder(a.path, tutorialFolder)) return false
+        if (outputFolder && inFolder(a.path, outputFolder)) return false
         return true
       }),
-    [assets, artFolder, toolsFolder],
+    [assets, artFolder, toolsFolder, tutorialFolder, outputFolder],
   )
 
   const categories = useMemo(() => {
@@ -204,6 +210,11 @@ export function AssetLibrary() {
                       currentId === a.id && "ring-2 ring-ring",
                     )}
                     onClick={() => setCurrentId(a.id)}
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setMenu({ x: e.clientX, y: e.clientY, asset: a })
+                    }}
                   >
                     {imgPath ? (
                       <Thumbnail
@@ -253,6 +264,35 @@ export function AssetLibrary() {
           )}
         </aside>
       </div>
+
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu(null)}
+          items={[
+            {
+              label: "打开文件位置",
+              onClick: () => api.revealInFolder(menu.asset.path),
+            },
+            {
+              label: "复制文件路径",
+              onClick: () => navigator.clipboard.writeText(menu.asset.path),
+            },
+            {
+              label: "删除资产",
+              danger: true,
+              onClick: async () => {
+                const ok = await askConfirm(
+                  `确定删除「${menu.asset.name}」吗？文件将从磁盘移除。`,
+                  "删除资产",
+                )
+                if (ok) await deleteAsset(menu.asset.id)
+              },
+            },
+          ]}
+        />
+      )}
     </div>
   )
 }
@@ -338,7 +378,7 @@ function AssetDetail({
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-8"
           onClick={() => setZoomed(false)}
         >
-          <Thumbnail path={currentImg} alt={asset.name} className="max-h-full max-w-full object-contain" />
+          <FullImage path={currentImg} alt={asset.name} className="max-h-full max-w-full object-contain" />
         </div>
       )}
     </div>

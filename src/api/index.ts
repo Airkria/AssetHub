@@ -37,6 +37,8 @@ export const api = {
   revealInFolder: (path: string) => call<void>("reveal_in_folder", { path }),
   checkPath: (path: string) => call<boolean>("check_path", { path }),
   getThumbnail: (path: string) => call<string>("get_thumbnail", { path }),
+  getFullImage: (path: string, maxPx: number) =>
+    call<string>("get_full_image", { path, maxPx }),
   clearCache: () => call<void>("clear_cache"),
   saveRulesFile: (path: string, rules: MatchRules) =>
     call<void>("save_rules_file", { path, rules }),

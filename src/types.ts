@@ -14,6 +14,8 @@ export interface Library {
   exclude_dirs: string[]
   art_folder: string
   tools_folder: string
+  tutorial_folder: string
+  output_folder: string
 }
 
 export interface CategoryRule {
@@ -38,6 +40,7 @@ export interface Config {
   active_library_id: string | null
   match_rules: MatchRules
   cache_dir: string
+  zoom_max_px: number
 }
 
 export interface Asset {

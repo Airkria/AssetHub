@@ -59,6 +59,7 @@ pub fn run() {
             commands::load_rules_file,
             commands::list_rules_files,
             commands::get_thumbnail,
+            commands::get_full_image,
             commands::clear_cache
         ])
         .run(tauri::generate_context!())

@@ -1,3 +1,4 @@
+import { useRef } from "react"
 import {
   Palette,
   Search,
@@ -38,11 +39,16 @@ const STATUS_TEXT: Record<ConnStatus, string> = {
 export function Sidebar({
   active,
   onChange,
+  settingsOpen,
+  onToggleSettings,
 }: {
   active: ModuleKey
   onChange: (key: ModuleKey) => void
+  settingsOpen: boolean
+  onToggleSettings: (origin?: { x: number; y: number }) => void
 }) {
   const { libraries, activeLibrary, status, setActiveLibrary } = useLibrary()
+  const settingsBtnRef = useRef<HTMLButtonElement>(null)
 
   return (
     <aside className="flex w-56 shrink-0 flex-col border-r bg-card">
@@ -97,14 +103,22 @@ export function Sidebar({
           {activeLibrary ? activeLibrary.path : STATUS_TEXT[status]}
         </div>
         <Button
-          variant={active === "settings" ? "secondary" : "ghost"}
+          ref={settingsBtnRef}
+          variant={settingsOpen ? "secondary" : "ghost"}
           className={cn(
             "justify-start",
-            active === "settings"
+            settingsOpen
               ? "bg-accent text-accent-foreground"
               : "text-muted-foreground",
           )}
-          onClick={() => onChange("settings")}
+          onClick={() => {
+            const rect = settingsBtnRef.current?.getBoundingClientRect()
+            onToggleSettings(
+              rect
+                ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+                : undefined,
+            )
+          }}
         >
           <Settings className="h-4 w-4" />
           设置

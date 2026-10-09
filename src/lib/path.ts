@@ -8,3 +8,12 @@ export function inFolder(path: string, folder: string) {
   const f = normPath(folder).replace(/\/+$/, "")
   return normPath(path).startsWith(f)
 }
+
+// 返回 path 相对 folder 的路径（不在 folder 下则返回空串）
+export function relativeTo(path: string, folder: string) {
+  if (!folder) return ""
+  const f = normPath(folder).replace(/\/+$/, "")
+  const p = normPath(path)
+  if (!p.startsWith(f + "/")) return ""
+  return p.slice(f.length + 1)
+}

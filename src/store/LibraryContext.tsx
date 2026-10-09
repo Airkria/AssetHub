@@ -20,6 +20,7 @@ const defaultConfig: Config = {
     format_families: [],
   },
   cache_dir: "",
+  zoom_max_px: 2048,
 }
 
 export type ConnStatus = "none" | "connected" | "error"
@@ -45,6 +46,7 @@ interface LibraryState {
   progress: ScanProgress
   error: string | null
   status: ConnStatus
+  configLoaded: boolean
   setConfig: (cfg: Config) => Promise<void>
   addLibrary: (name: string, path: string) => Promise<Library>
   removeLibrary: (id: string) => Promise<void>
@@ -72,6 +74,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   })
   const [error, setError] = useState<string | null>(null)
   const [status, setStatus] = useState<ConnStatus>("none")
+  const [configLoaded, setConfigLoaded] = useState(false)
 
   const activeLibrary = useMemo(
     () => config.libraries.find((l) => l.id === config.active_library_id) ?? null,
@@ -86,8 +89,11 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     if (!isTauri) return
     api
       .getConfig()
-      .then(setConfigState)
-      .catch(() => {})
+      .then((c) => {
+        setConfigState(c)
+        setConfigLoaded(true)
+      })
+      .catch(() => setConfigLoaded(true))
   }, [])
 
   useEffect(() => {
@@ -263,6 +269,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
         progress,
         error,
         status,
+        configLoaded,
         setConfig,
         addLibrary,
         removeLibrary,

@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react"
+import {
+  useEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type RefObject,
+  type SetStateAction,
+} from "react"
 import {
   Save,
   FolderSearch,
@@ -14,7 +21,7 @@ import {
   FileImage,
   type LucideIcon,
 } from "lucide-react"
-import { ModuleHeader } from "@/components/layout/module-header"
+import { AnimatePresence, motion } from "framer-motion"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import {
@@ -80,25 +87,39 @@ function matchRulesToForm(rules: MatchRules): RulesForm {
   }
 }
 
-type SectionKey = "paths" | "rules" | "formats" | "config"
+type SectionKey = "lib" | "rules" | "preview" | "index"
+const KEYS: SectionKey[] = ["lib", "rules", "preview", "index"]
 
 const NAV: { key: SectionKey; label: string; icon: LucideIcon }[] = [
-  { key: "paths", label: "路径设置", icon: FolderPlus },
-  { key: "rules", label: "匹配规则", icon: Filter },
-  { key: "formats", label: "预览文件格式", icon: FileImage },
-  { key: "config", label: "配置文件", icon: Save },
+  { key: "lib", label: "资产库设置", icon: FolderPlus },
+  { key: "rules", label: "规则设置", icon: Filter },
+  { key: "preview", label: "预览设置", icon: FileImage },
+  { key: "index", label: "扫描索引", icon: FolderSearch },
 ]
 
-export function Settings() {
+// 放大尺寸档位（最长边像素）
+const ZOOM_PRESETS = [
+  { label: "1K", value: 1024 },
+  { label: "2K", value: 2048 },
+  { label: "3K", value: 3072 },
+  { label: "4K", value: 4096 },
+]
+
+export function Settings({ onClose }: { onClose: () => void }) {
   const { config, setConfig } = useLibrary()
   const [form, setForm] = useState<RulesForm>(() => matchRulesToForm(config.match_rules))
-  const [active, setActive] = useState<SectionKey>("paths")
+  const [active, setActive] = useState<SectionKey>("lib")
   const scrollRef = useRef<HTMLDivElement | null>(null)
-  const pathsRef = useRef<HTMLElement | null>(null)
+  const libRef = useRef<HTMLElement | null>(null)
   const rulesRef = useRef<HTMLElement | null>(null)
-  const formatsRef = useRef<HTMLElement | null>(null)
-  const configRef = useRef<HTMLElement | null>(null)
-  const refs = { paths: pathsRef, rules: rulesRef, formats: formatsRef, config: configRef }
+  const previewRef = useRef<HTMLElement | null>(null)
+  const indexRef = useRef<HTMLElement | null>(null)
+  const refs: Record<SectionKey, RefObject<HTMLElement | null>> = {
+    lib: libRef,
+    rules: rulesRef,
+    preview: previewRef,
+    index: indexRef,
+  }
 
   // 配置从外部变化（选库加载配置等）时，重新同步表单
   useEffect(() => {
@@ -111,9 +132,14 @@ export function Settings() {
   const onScroll = () => {
     const c = scrollRef.current
     if (!c) return
+    // 滚到底部时强制高亮最后一个板块
+    if (c.scrollTop + c.clientHeight >= c.scrollHeight - 8) {
+      setActive("index")
+      return
+    }
     const cTop = c.getBoundingClientRect().top
-    let cur: SectionKey = "paths"
-    for (const k of ["paths", "rules", "formats", "config"] as SectionKey[]) {
+    let cur: SectionKey = "lib"
+    for (const k of KEYS) {
       const el = refs[k].current
       if (el && el.getBoundingClientRect().top - cTop <= 80) cur = k
     }
@@ -125,8 +151,16 @@ export function Settings() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <ModuleHeader title="设置" description="配置资源库、匹配规则与预览格式" />
+    <div className="flex h-full flex-col">
+      <div className="flex items-center justify-between border-b px-4 py-3">
+        <div>
+          <div className="text-base font-semibold">设置</div>
+          <div className="text-xs text-muted-foreground">配置资源库、匹配规则与预览</div>
+        </div>
+        <Button variant="ghost" size="icon" onClick={onClose}>
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
       <div className="flex min-h-0 flex-1">
         <aside className="w-44 shrink-0 border-r p-2">
           <nav className="flex flex-col gap-1">
@@ -148,19 +182,16 @@ export function Settings() {
         </aside>
         <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto p-6">
           <div className="space-y-6">
-            <section ref={pathsRef} className="scroll-mt-6">
-              <PathsSection />
+            <section ref={libRef} className="scroll-mt-6">
+              <LibSection />
             </section>
             <section ref={rulesRef} className="scroll-mt-6">
               <RulesSection form={form} setForm={setForm} />
             </section>
-            <section ref={formatsRef} className="scroll-mt-6">
-              <FormatsSection form={form} setForm={setForm} />
+            <section ref={previewRef} className="scroll-mt-6">
+              <PreviewSection form={form} setForm={setForm} />
             </section>
-            <section ref={configRef} className="scroll-mt-6">
-              <ConfigFileSection form={form} setForm={setForm} config={config} setConfig={setConfig} />
-            </section>
-            <section>
+            <section ref={indexRef} className="scroll-mt-6">
               <IndexSection />
             </section>
           </div>
@@ -170,7 +201,58 @@ export function Settings() {
   )
 }
 
-function PathsSection() {
+// 设置 Modal：从设置按钮为原点 scale 释放 / 收回，背景变暗
+export function SettingsModal({
+  open,
+  onClose,
+  origin,
+}: {
+  open: boolean
+  onClose: () => void
+  origin: { x: number; y: number } | null
+}) {
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose()
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [open, onClose])
+
+  const originStyle = origin
+    ? `${origin.x - window.innerWidth * 0.03}px ${origin.y - window.innerHeight * 0.03}px`
+    : "center"
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          key="settings-overlay"
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/50"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+          onClick={onClose}
+        >
+          <motion.div
+            className="flex h-[94%] w-[94%] flex-col overflow-hidden rounded-xl border bg-background shadow-2xl"
+            style={{ transformOrigin: originStyle }}
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0, opacity: 0 }}
+            transition={{ type: "spring", damping: 28, stiffness: 320 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Settings onClose={onClose} />
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  )
+}
+
+// —— 板块 1：资产库设置 ——
+function LibSection() {
   const { libraries, activeLibrary, addLibrary, removeLibrary, config, setConfig, updateActiveLibrary } =
     useLibrary()
 
@@ -232,8 +314,8 @@ function PathsSection() {
 
       <Card className="max-w-2xl">
         <CardHeader>
-          <CardTitle>板块划分</CardTitle>
-          <CardDescription>当前资源库的美术设定 / 工具板块对应文件夹（每库独立）</CardDescription>
+          <CardTitle>板块映射</CardTitle>
+          <CardDescription>美术设定 / 工具 / 教程 / 输出 对应的文件夹（每库独立）</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <FolderRow
@@ -247,6 +329,18 @@ function PathsSection() {
             value={activeLibrary?.tools_folder ?? ""}
             onPick={(p) => updateActiveLibrary({ tools_folder: p })}
             onClear={() => updateActiveLibrary({ tools_folder: "" })}
+          />
+          <FolderRow
+            label="教程文件夹"
+            value={activeLibrary?.tutorial_folder ?? ""}
+            onPick={(p) => updateActiveLibrary({ tutorial_folder: p })}
+            onClear={() => updateActiveLibrary({ tutorial_folder: "" })}
+          />
+          <FolderRow
+            label="输出文件夹"
+            value={activeLibrary?.output_folder ?? ""}
+            onPick={(p) => updateActiveLibrary({ output_folder: p })}
+            onClear={() => updateActiveLibrary({ output_folder: "" })}
           />
         </CardContent>
       </Card>
@@ -294,7 +388,7 @@ function ScanScopeCard() {
   return (
     <Card className="max-w-2xl">
       <CardHeader>
-        <CardTitle>扫描范围</CardTitle>
+        <CardTitle>扫描规则</CardTitle>
         <CardDescription>当前资源库的扫描范围（每库独立，切换库时跟着变）</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -366,6 +460,7 @@ function FolderRow({
   )
 }
 
+// —— 板块 2：规则设置 ——
 function RulesSection({
   form,
   setForm,
@@ -384,7 +479,7 @@ function RulesSection({
       <Card className="max-w-2xl">
         <CardHeader>
           <CardTitle>分类规则</CardTitle>
-          <CardDescription>按扩展名归类资产（优先于目录名分类，全局共享）</CardDescription>
+          <CardDescription>按扩展名归类资产（命中不到规则归「未分类」，全局共享）</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
           {form.categoryRules.map((r, i) => (
@@ -443,61 +538,88 @@ function RulesSection({
           />
         </CardContent>
       </Card>
+
+      <ConfigFileSection form={form} setForm={setForm} />
     </div>
   )
 }
 
-function FormatsSection({
+// —— 板块 3：预览设置 ——
+function PreviewSection({
   form,
   setForm,
 }: {
   form: RulesForm
   setForm: Dispatch<SetStateAction<RulesForm>>
 }) {
+  const { config, setConfig } = useLibrary()
+
   return (
-    <Card className="max-w-2xl">
-      <CardHeader>
-        <CardTitle>预览文件格式</CardTitle>
-        <CardDescription>按格式家族管理可索引/预览的扩展名白名单（全局共享）</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {form.formatFamilies.map((f, i) => (
-          <div key={f.key} className="flex items-center gap-3">
-            <span className="w-14 shrink-0 text-sm font-medium">{f.label}</span>
-            <Input
-              value={f.extensions}
-              onChange={(e) =>
-                setForm((prev) => ({
-                  ...prev,
-                  formatFamilies: prev.formatFamilies.map((x, j) =>
-                    j === i ? { ...x, extensions: e.target.value } : x,
-                  ),
-                }))
-              }
-              placeholder="扩展名，逗号分隔"
-              className="flex-1"
-            />
-          </div>
-        ))}
-        <p className="text-xs text-muted-foreground">
-          白名单决定哪些文件被索引与预览；预览渲染能力按家族逐步接入（3D 预览 v1.1）
-        </p>
-      </CardContent>
-    </Card>
+    <div className="space-y-4">
+      <Card className="max-w-2xl">
+        <CardHeader>
+          <CardTitle>格式白名单</CardTitle>
+          <CardDescription>按格式家族管理可索引/预览的扩展名白名单（全局共享）</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {form.formatFamilies.map((f, i) => (
+            <div key={f.key} className="flex items-center gap-3">
+              <span className="w-14 shrink-0 text-sm font-medium">{f.label}</span>
+              <Input
+                value={f.extensions}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    formatFamilies: prev.formatFamilies.map((x, j) =>
+                      j === i ? { ...x, extensions: e.target.value } : x,
+                    ),
+                  }))
+                }
+                placeholder="扩展名，逗号分隔"
+                className="flex-1"
+              />
+            </div>
+          ))}
+          <p className="text-xs text-muted-foreground">
+            白名单决定哪些文件被索引与预览；预览渲染能力按家族逐步接入（3D 预览 v1.1）
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card className="max-w-2xl">
+        <CardHeader>
+          <CardTitle>放大尺寸上限</CardTitle>
+          <CardDescription>点击图片放大时，最长边解码到此尺寸（原图更大时按比例缩小）</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <select
+            value={config.zoom_max_px}
+            onChange={(e) => setConfig({ ...config, zoom_max_px: Number(e.target.value) })}
+            className="h-8 rounded-md border border-input bg-transparent px-2 text-sm"
+          >
+            {ZOOM_PRESETS.map((p) => (
+              <option key={p.value} value={p.value}>
+                {p.label}（{p.value}px）
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-muted-foreground">
+            tga / exr / hdr / dds / psd 等 webview 无法解码的格式，由后端按此档位解码放大图
+          </p>
+        </CardContent>
+      </Card>
+    </div>
   )
 }
 
 function ConfigFileSection({
   form,
   setForm,
-  config,
-  setConfig,
 }: {
   form: RulesForm
   setForm: Dispatch<SetStateAction<RulesForm>>
-  config: ReturnType<typeof useLibrary>["config"]
-  setConfig: ReturnType<typeof useLibrary>["setConfig"]
 }) {
+  const { config, setConfig } = useLibrary()
   const [kind, setKind] = useState<"public" | "personal">("public")
   const [rulesName, setRulesName] = useState("")
   const [currentConfig, setCurrentConfig] = useState("")
@@ -601,6 +723,7 @@ function ConfigFileSection({
   )
 }
 
+// —— 板块 4：扫描索引 ——
 function IndexSection() {
   const { scanning, paused, progress, error, assets, startScan, cancelScan, pauseScan, resumeScan } =
     useLibrary()

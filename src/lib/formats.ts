@@ -14,3 +14,6 @@ export const IMAGE_EXTS = new Set([
   "tif",
   "tiff",
 ])
+
+// webview 原生可解码的图片格式（其余 IMAGE_EXTS 放大时需后端解码）
+export const NATIVE_IMAGE_EXTS = new Set(["png", "jpg", "jpeg", "webp", "gif", "bmp"])

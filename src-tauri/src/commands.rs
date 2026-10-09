@@ -71,6 +71,8 @@ pub fn add_library(state: State<AppState>, name: String, path: String) -> Result
         exclude_dirs: vec![],
         art_folder: String::new(),
         tools_folder: String::new(),
+        tutorial_folder: String::new(),
+        output_folder: String::new(),
     };
     cfg.libraries.push(lib.clone());
     if cfg.active_library_id.is_none() {
@@ -124,7 +126,9 @@ pub fn start_scan(app: AppHandle, state: State<AppState>, lib_id: String) -> Res
     let rules = cfg.match_rules.clone();
     let art_rel = to_rel(&root, &lib.art_folder);
     let tools_rel = to_rel(&root, &lib.tools_folder);
-    let extra_dirs: Vec<String> = [art_rel, tools_rel]
+    let tutorial_rel = to_rel(&root, &lib.tutorial_folder);
+    let output_rel = to_rel(&root, &lib.output_folder);
+    let extra_dirs: Vec<String> = [art_rel, tools_rel, tutorial_rel, output_rel]
         .into_iter()
         .filter(|s| !s.is_empty())
         .collect();
@@ -412,6 +416,58 @@ pub fn get_thumbnail(state: State<AppState>, path: String) -> Result<String, Str
             Ok(thumb_path.to_string_lossy().to_string())
         }
         Err(_) => Ok(path), // 无法解码（如超大/特殊格式）则回退原图
+    }
+}
+
+/// 全分辨率解码（放大预览用）：webview 解不了 tga/exr/hdr/dds/psd，
+/// 由后端按 `max_px` 上限解码成 PNG，返回缓存路径（独立 `full/` 目录）。
+#[tauri::command]
+pub fn get_full_image(state: State<AppState>, path: String, max_px: u32) -> Result<String, String> {
+    let cache_dir = {
+        let cfg = state.config.lock().unwrap();
+        if cfg.cache_dir.trim().is_empty() {
+            state.app_data_dir.join("thumbnails")
+        } else {
+            PathBuf::from(&cfg.cache_dir)
+        }
+    };
+    let full_dir = cache_dir.join("full");
+    std::fs::create_dir_all(&full_dir).map_err(|e| e.to_string())?;
+
+    let mtime = std::fs::metadata(&path)
+        .ok()
+        .and_then(|m| m.modified().ok())
+        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let key = {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        path.hash(&mut h);
+        mtime.hash(&mut h);
+        max_px.hash(&mut h);
+        format!("{:016x}", h.finish())
+    };
+    let out_path = full_dir.join(format!("{}.png", key));
+
+    if out_path.exists() {
+        return Ok(out_path.to_string_lossy().to_string());
+    }
+
+    match image::open(&path) {
+        Ok(img) => {
+            let (w, h) = (img.width(), img.height());
+            let longest = w.max(h);
+            let out = if max_px > 0 && longest > max_px {
+                let ratio = max_px as f64 / longest as f64;
+                img.thumbnail((w as f64 * ratio).max(1.0) as u32, (h as f64 * ratio).max(1.0) as u32)
+            } else {
+                img
+            };
+            out.save(&out_path).map_err(|e| e.to_string())?;
+            Ok(out_path.to_string_lossy().to_string())
+        }
+        Err(_) => Ok(path),
     }
 }
 

@@ -4,10 +4,12 @@ import { ModuleHeader } from "@/components/layout/module-header"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { VirtualGrid } from "@/components/VirtualGrid"
-import { Thumbnail } from "@/components/Thumbnail"
+import { Thumbnail, FullImage } from "@/components/Thumbnail"
+import { ContextMenu } from "@/components/ContextMenu"
 import { Card } from "@/components/ui/card"
 import { TagEditor } from "@/components/TagEditor"
 import { useLibrary } from "@/store/LibraryContext"
+import { api, askConfirm } from "@/api"
 import { inFolder } from "@/lib/path"
 import { cn } from "@/lib/utils"
 import { useThumbSize } from "@/hooks/useThumbSize"
@@ -16,12 +18,13 @@ import type { Asset } from "@/types"
 import { IMAGE_EXTS } from "@/lib/formats"
 
 export function ArtDirection() {
-  const { assets, activeLibrary, updateMetadata, renameAsset } = useLibrary()
+  const { assets, activeLibrary, updateMetadata, renameAsset, deleteAsset } = useLibrary()
   const artFolder = activeLibrary?.art_folder ?? ""
   const { cols, setCols, onWheel } = useThumbSize(3)
   const [query, setQuery] = useState("")
   const [currentId, setCurrentId] = useState<string | null>(null)
   const [detailWidth, setDetailWidth] = useState(288)
+  const [menu, setMenu] = useState<{ x: number; y: number; asset: Asset } | null>(null)
 
   const artAssets = useMemo(() => {
     return assets.filter((a) => {
@@ -100,7 +103,7 @@ export function ArtDirection() {
               <p className="mt-1 text-xs">
                 {artFolder
                   ? "请在该文件夹放入参考图后重新扫描"
-                  : "未配置美术设定文件夹（设置 → 路径设置）"}
+                  : "未配置美术设定文件夹（设置 → 资产库设置）"}
               </p>
             </div>
           ) : (
@@ -119,6 +122,11 @@ export function ArtDirection() {
                       currentId === a.id && "ring-2 ring-ring",
                     )}
                     onClick={() => setCurrentId(a.id)}
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setMenu({ x: e.clientX, y: e.clientY, asset: a })
+                    }}
                   >
                     {IMAGE_EXTS.has(a.ext) || a.preview_paths[0] ? (
                       <Thumbnail
@@ -167,6 +175,35 @@ export function ArtDirection() {
           )}
         </aside>
       </div>
+
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu(null)}
+          items={[
+            {
+              label: "打开文件位置",
+              onClick: () => api.revealInFolder(menu.asset.path),
+            },
+            {
+              label: "复制文件路径",
+              onClick: () => navigator.clipboard.writeText(menu.asset.path),
+            },
+            {
+              label: "删除资产",
+              danger: true,
+              onClick: async () => {
+                const ok = await askConfirm(
+                  `确定删除「${menu.asset.name}」吗？文件将从磁盘移除。`,
+                  "删除资产",
+                )
+                if (ok) await deleteAsset(menu.asset.id)
+              },
+            },
+          ]}
+        />
+      )}
     </div>
   )
 }
@@ -256,7 +293,7 @@ function ArtDetail({
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-8"
           onClick={() => setZoomed(false)}
         >
-          <Thumbnail path={img} alt={asset.name} className="max-h-full max-w-full object-contain" />
+          <FullImage path={img} alt={asset.name} className="max-h-full max-w-full object-contain" />
         </div>
       )}
     </div>

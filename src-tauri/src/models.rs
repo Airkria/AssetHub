@@ -18,6 +18,12 @@ pub struct Library {
     /// 工具文件夹（绝对路径）
     #[serde(default)]
     pub tools_folder: String,
+    /// 教程文件夹（绝对路径）
+    #[serde(default)]
+    pub tutorial_folder: String,
+    /// 输出文件夹（绝对路径）
+    #[serde(default)]
+    pub output_folder: String,
 }
 
 /// 扩展名 → 分类 的规则
@@ -145,6 +151,13 @@ pub struct Config {
     /// 缩略图缓存位置（空 = 用默认应用数据目录）
     #[serde(default)]
     pub cache_dir: String,
+    /// 放大预览时解码的尺寸上限（像素，最长边）
+    #[serde(default = "default_zoom_max_px")]
+    pub zoom_max_px: u32,
+}
+
+fn default_zoom_max_px() -> u32 {
+    2048
 }
 
 impl Default for Config {
@@ -154,6 +167,7 @@ impl Default for Config {
             active_library_id: None,
             match_rules: MatchRules::default(),
             cache_dir: String::new(),
+            zoom_max_px: default_zoom_max_px(),
         }
     }
 }

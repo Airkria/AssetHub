@@ -55,8 +55,8 @@ fn segment_matches(actual: &str, pattern: &str) -> bool {
     }
 }
 
-/// 分类：先按扩展名规则（全局），命中则用规则分类；否则回退目录名分类。
-pub fn categorize_asset(ext: &str, rel: &Path, rules: &[CategoryRule]) -> String {
+/// 分类：按扩展名规则（全局），命中则用规则分类；未命中归「未分类」。
+pub fn categorize_asset(ext: &str, rules: &[CategoryRule]) -> String {
     let ext = ext.trim_start_matches('.').to_lowercase();
     for rule in rules {
         if rule
@@ -67,25 +67,5 @@ pub fn categorize_asset(ext: &str, rel: &Path, rules: &[CategoryRule]) -> String
             return rule.name.clone();
         }
     }
-    categorize_by_dir(rel)
-}
-
-fn categorize_by_dir(rel: &Path) -> String {
-    let parent = rel.parent();
-    let comp = parent
-        .and_then(|p| p.file_name())
-        .and_then(|s| s.to_str())
-        .unwrap_or("未分类");
-    clean_category(comp)
-}
-
-fn clean_category(s: &str) -> String {
-    if let Some((_, cn)) = s.split_once('-') {
-        let cn = cn.trim();
-        if !cn.is_empty() {
-            return cn.to_string();
-        }
-    }
-    s.trim_start_matches(|c: char| c.is_ascii_digit() || c == '_')
-        .to_string()
+    "未分类".to_string()
 }

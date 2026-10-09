@@ -144,7 +144,7 @@ pub fn scan(
                 .parent()
                 .map(|p| p.to_string_lossy().replace('\\', "/"))
                 .unwrap_or_default();
-            let category = categorize_asset(&ext, rel, &rules.category_rules);
+            let category = categorize_asset(&ext, &rules.category_rules);
             let mtime = meta
                 .as_ref()
                 .and_then(|m| m.modified().ok())
