@@ -3,6 +3,7 @@ mod config;
 #[cfg(target_os = "windows")]
 mod drag;
 mod matcher;
+mod meta;
 mod models;
 mod scanner;
 mod store;

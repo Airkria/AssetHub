@@ -50,6 +50,9 @@ pub struct MatchRules {
     pub category_rules: Vec<CategoryRule>,
     #[serde(default = "default_format_families")]
     pub format_families: Vec<FormatFamily>,
+    /// 共识标签词表（团队共享，随配置文件同步）
+    #[serde(default)]
+    pub tag_vocabulary: Vec<String>,
 }
 
 fn default_preview_suffixes() -> Vec<String> {
@@ -135,6 +138,7 @@ impl Default for MatchRules {
             preview_suffixes: default_preview_suffixes(),
             category_rules: default_category_rules(),
             format_families: default_format_families(),
+            tag_vocabulary: vec![],
         }
     }
 }

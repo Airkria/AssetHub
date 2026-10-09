@@ -1,8 +1,9 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { Plus, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { useLibrary } from "@/store/LibraryContext"
 
 export function TagEditor({
   tags,
@@ -14,6 +15,13 @@ export function TagEditor({
   onChange: (tags: string[]) => void
 }) {
   const [input, setInput] = useState("")
+
+  // 共识标签词表 + 现有标签 → 建议列表（去重）
+  const { config } = useLibrary()
+  const allSuggested = useMemo(() => {
+    const vocab = config.match_rules.tag_vocabulary ?? []
+    return Array.from(new Set([...vocab, ...suggested]))
+  }, [config.match_rules.tag_vocabulary, suggested])
 
   const add = (t: string) => {
     const tag = t.trim()
@@ -51,9 +59,9 @@ export function TagEditor({
           <Plus className="h-4 w-4" />
         </Button>
       </div>
-      {suggested.filter((s) => !tags.includes(s)).length > 0 && (
+      {allSuggested.filter((s) => !tags.includes(s)).length > 0 && (
         <div className="flex flex-wrap gap-1">
-          {suggested
+          {allSuggested
             .filter((s) => !tags.includes(s))
             .slice(0, 12)
             .map((s) => (

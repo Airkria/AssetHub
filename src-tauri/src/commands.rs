@@ -25,21 +25,13 @@ struct ScanError {
     message: String,
 }
 
-/// 把绝对路径转成相对库根的路径（不在库根下则返回空串）
-fn to_rel(root: &Path, abs: &str) -> String {
-    if abs.is_empty() {
-        return String::new();
-    }
-    let root_s = root
-        .to_string_lossy()
-        .replace('\\', "/")
-        .trim_end_matches('/')
-        .to_string();
-    let abs_s = abs.replace('\\', "/");
-    match abs_s.strip_prefix(&root_s) {
-        Some(rel) => rel.trim_start_matches('/').to_string(),
-        None => String::new(),
-    }
+/// 取某库的根路径（用于定位库根下的 meta.json）。
+fn lib_root(state: &AppState, lib_id: &str) -> Option<PathBuf> {
+    let cfg = state.config.lock().unwrap();
+    cfg.libraries
+        .iter()
+        .find(|l| l.id == lib_id)
+        .map(|l| PathBuf::from(&l.path))
 }
 
 #[tauri::command]
@@ -124,14 +116,17 @@ pub fn start_scan(app: AppHandle, state: State<AppState>, lib_id: String) -> Res
     }
 
     let rules = cfg.match_rules.clone();
-    let art_rel = to_rel(&root, &lib.art_folder);
-    let tools_rel = to_rel(&root, &lib.tools_folder);
-    let tutorial_rel = to_rel(&root, &lib.tutorial_folder);
-    let output_rel = to_rel(&root, &lib.output_folder);
-    let extra_dirs: Vec<String> = [art_rel, tools_rel, tutorial_rel, output_rel]
-        .into_iter()
-        .filter(|s| !s.is_empty())
-        .collect();
+    // 板块映射文件夹（绝对路径，可跨盘），作为额外扫描根
+    let extra_dirs: Vec<String> = [
+        lib.art_folder.clone(),
+        lib.tools_folder.clone(),
+        lib.tutorial_folder.clone(),
+        lib.output_folder.clone(),
+    ]
+    .into_iter()
+    .map(|s| s.trim().to_string())
+    .filter(|s| !s.is_empty())
+    .collect();
     let app_data_dir = state.app_data_dir.clone();
     let cancel = state.cancel_flag.clone();
     let pause = state.pause_flag.clone();
@@ -174,7 +169,7 @@ fn run_scan(
         Ok(Some(mut assets)) => {
             let count = assets.len();
             // 增量：保留未变文件的用户元数据（标签/说明/链接），避免重扫清空标注
-            merge_metadata(&mut assets, &store::load(&app_data_dir, &lib_id));
+            merge_metadata(&mut assets, &root, &store::load(&app_data_dir, &lib_id));
             match store::save(&app_data_dir, &lib_id, &assets) {
                 Ok(()) => {
                     let _ = app.emit("scan://done", ScanDone { count });
@@ -199,10 +194,10 @@ pub fn cancel_scan(state: State<AppState>) {
     state.cancel_flag.store(true, Ordering::SeqCst);
 }
 
-/// 增量：把旧索引里未变文件的用户元数据（标签/说明/链接）合并到新扫描结果。
-fn merge_metadata(new_assets: &mut [Asset], old_assets: &[Asset]) {
-    use std::collections::HashMap;
-    let old: HashMap<&str, &Asset> = old_assets.iter().map(|a| (a.id.as_str(), a)).collect();
+/// 增量：先兜底旧索引里的历史标注，再用 meta.json（权威源）覆盖。
+fn merge_metadata(new_assets: &mut [Asset], lib_root: &Path, old_assets: &[Asset]) {
+    let old: std::collections::HashMap<&str, &Asset> =
+        old_assets.iter().map(|a| (a.id.as_str(), a)).collect();
     for a in new_assets.iter_mut() {
         if let Some(o) = old.get(a.id.as_str()) {
             a.tags = o.tags.clone();
@@ -211,6 +206,8 @@ fn merge_metadata(new_assets: &mut [Asset], old_assets: &[Asset]) {
             a.edited = o.edited;
         }
     }
+    let meta = crate::meta::load(lib_root);
+    crate::meta::apply(new_assets, &meta);
 }
 
 #[tauri::command]
@@ -225,7 +222,12 @@ pub fn resume_scan(state: State<AppState>) {
 
 #[tauri::command]
 pub fn list_assets(state: State<AppState>, lib_id: String) -> Vec<Asset> {
-    store::load(&state.app_data_dir, &lib_id)
+    let mut assets = store::load(&state.app_data_dir, &lib_id);
+    if let Some(root) = lib_root(&state, &lib_id) {
+        let meta = crate::meta::load(&root);
+        crate::meta::apply(&mut assets, &meta);
+    }
+    assets
 }
 
 #[tauri::command]
@@ -239,12 +241,17 @@ pub fn update_asset(
 ) -> Result<(), String> {
     let mut assets = store::load(&state.app_data_dir, &lib_id);
     if let Some(a) = assets.iter_mut().find(|a| a.id == id) {
-        a.tags = tags;
-        a.description = description;
-        a.link = link;
+        a.tags = tags.clone();
+        a.description = description.clone();
+        a.link = link.clone();
         a.edited = true;
     }
-    store::save(&state.app_data_dir, &lib_id, &assets)
+    store::save(&state.app_data_dir, &lib_id, &assets)?;
+    // 写入权威源 meta.json
+    if let Some(root) = lib_root(&state, &lib_id) {
+        crate::meta::set_entry(&root, &id, tags, description, link)?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -294,6 +301,9 @@ pub fn rename_asset(
         }
     }
     store::save(&state.app_data_dir, &lib_id, &assets)?;
+    if let Some(root) = lib_root(&state, &lib_id) {
+        crate::meta::rename_entry(&root, &id, &new_id)?;
+    }
     updated.ok_or("更新失败".into())
 }
 
@@ -310,7 +320,11 @@ pub fn delete_asset(
     };
     std::fs::remove_file(&path).map_err(|e| e.to_string())?;
     assets.retain(|a| a.id != id);
-    store::save(&state.app_data_dir, &lib_id, &assets)
+    store::save(&state.app_data_dir, &lib_id, &assets)?;
+    if let Some(root) = lib_root(&state, &lib_id) {
+        crate::meta::remove_entry(&root, &id)?;
+    }
+    Ok(())
 }
 
 #[tauri::command]

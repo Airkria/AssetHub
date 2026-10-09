@@ -18,6 +18,7 @@ const defaultConfig: Config = {
     preview_suffixes: ["", "_preview", "_thumb", "_预览"],
     category_rules: [],
     format_families: [],
+    tag_vocabulary: [],
   },
   cache_dir: "",
   zoom_max_px: 2048,

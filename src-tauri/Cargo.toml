@@ -1,6 +1,6 @@
 [package]
 name = "asset-hub"
-version = "1.12.0"
+version = "1.13.0"
 description = "NAS 资产库索引与管理中枢"
 authors = ["you"]
 edition = "2021"

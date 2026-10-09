@@ -55,6 +55,7 @@ interface RulesForm {
   suffixes: string
   categoryRules: { name: string; extensions: string }[]
   formatFamilies: { key: string; label: string; extensions: string }[]
+  tagVocabulary: string
 }
 
 function formToMatchRules(form: RulesForm): MatchRules {
@@ -69,6 +70,7 @@ function formToMatchRules(form: RulesForm): MatchRules {
       label: f.label,
       extensions: f.extensions.split(",").map((s) => s.trim()).filter(Boolean),
     })),
+    tag_vocabulary: form.tagVocabulary.split(",").map((s) => s.trim()).filter(Boolean),
   }
 }
 
@@ -84,6 +86,7 @@ function matchRulesToForm(rules: MatchRules): RulesForm {
       label: f.label,
       extensions: f.extensions.join(","),
     })),
+    tagVocabulary: rules.tag_vocabulary.join(","),
   }
 }
 
@@ -237,10 +240,10 @@ export function SettingsModal({
           <motion.div
             className="flex h-[94%] w-[94%] flex-col overflow-hidden rounded-xl border bg-background shadow-2xl"
             style={{ transformOrigin: originStyle }}
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0, opacity: 0 }}
-            transition={{ type: "spring", damping: 28, stiffness: 320 }}
+            initial={{ scaleX: 0.3, scaleY: 0.03, opacity: 0 }}
+            animate={{ scaleX: 1, scaleY: 1, opacity: 1 }}
+            exit={{ scaleX: 0.3, scaleY: 0.03, opacity: 0 }}
+            transition={{ duration: 0.38, ease: [0.16, 1, 0.3, 1] }}
             onClick={(e) => e.stopPropagation()}
           >
             <Settings onClose={onClose} />
@@ -535,6 +538,20 @@ function RulesSection({
             value={form.suffixes}
             onChange={(e) => setForm((f) => ({ ...f, suffixes: e.target.value }))}
             placeholder="_preview,_thumb"
+          />
+        </CardContent>
+      </Card>
+
+      <Card className="max-w-2xl">
+        <CardHeader>
+          <CardTitle>共识标签</CardTitle>
+          <CardDescription>团队共享的标签词表（逗号分隔），打标签时自动建议，随配置文件同步</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Input
+            value={form.tagVocabulary}
+            onChange={(e) => setForm((f) => ({ ...f, tagVocabulary: e.target.value }))}
+            placeholder="科幻, 场景, 角色, 贴图"
           />
         </CardContent>
       </Card>

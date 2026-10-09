@@ -33,6 +33,7 @@ export interface MatchRules {
   preview_suffixes: string[]
   category_rules: CategoryRule[]
   format_families: FormatFamily[]
+  tag_vocabulary: string[]
 }
 
 export interface Config {
