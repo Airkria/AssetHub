@@ -20,13 +20,14 @@ import {
   ChevronRight,
   Folder,
   PenLine,
+  X,
 } from "lucide-react"
 import { ModuleHeader } from "@/components/layout/module-header"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { VirtualGrid } from "@/components/VirtualGrid"
-import { Thumbnail, FullImage, FileIcon } from "@/components/Thumbnail"
+import { Thumbnail, FullImage, FileIcon, VideoThumbnail } from "@/components/Thumbnail"
 import { ContextMenu } from "@/components/ContextMenu"
 import { Card } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
@@ -600,6 +601,7 @@ function AssetCard({
   onMenu: (e: ReactMouseEvent<HTMLDivElement>) => void
   onDrag: (e: ReactDragEvent<HTMLDivElement>) => void
 }) {
+  const isVideo = VIDEO_EXTS.has(asset.ext)
   const imgPath =
     asset.preview_paths[0] ?? (IMAGE_EXTS.has(asset.ext) ? asset.path : null)
   const ring = selectMode
@@ -631,7 +633,12 @@ function AssetCard({
           {checked && <Check className="h-3 w-3" />}
         </div>
       )}
-      {imgPath ? (
+      {isVideo ? (
+        <VideoThumbnail
+          path={asset.path}
+          className="aspect-square w-full object-cover"
+        />
+      ) : imgPath ? (
         <Thumbnail
           path={imgPath}
           alt={asset.name}
@@ -786,6 +793,7 @@ function DetailRow({
 }) {
   const [desc, setDesc] = useState(asset.description)
   useEffect(() => setDesc(asset.description), [asset.id, asset.description])
+  const isVideo = VIDEO_EXTS.has(asset.ext)
   const isImage = IMAGE_EXTS.has(asset.ext)
   const version = extractVersion(asset.name)
   const ring = selectMode
@@ -819,7 +827,9 @@ function DetailRow({
         </div>
       )}
       <div className="h-14 w-14 shrink-0">
-        {isImage ? (
+        {isVideo ? (
+          <VideoThumbnail path={asset.path} className="h-full w-full rounded object-cover" />
+        ) : isImage ? (
           <Thumbnail
             path={asset.preview_paths[0] ?? asset.path}
             alt={asset.name}
@@ -905,24 +915,30 @@ function AssetDetail({
         </Button>
       </div>
       {isVideo ? (
-        playing ? (
-          <video
-            src={assetUrl(asset.path)}
-            controls
-            className="max-h-80 w-full rounded-lg bg-black"
-          />
-        ) : (
+        <div className="space-y-2">
+          {playing && (
+            <video
+              src={assetUrl(asset.path)}
+              controls
+              controlsList="nofullscreen"
+              className="max-h-80 w-full rounded-lg bg-black"
+            />
+          )}
           <div className="flex items-center gap-2">
-            <Button size="sm" onClick={() => setPlaying(true)}>
+            <Button size="sm" onClick={() => setPlaying((p) => !p)}>
               <Play className="h-4 w-4" />
-              播放
+              {playing ? "收起" : "播放"}
             </Button>
             <Button size="sm" variant="outline" onClick={() => setFullscreen(true)}>
               <Maximize className="h-4 w-4" />
               全屏
             </Button>
+            <Button size="sm" variant="ghost" onClick={() => api.openUrl(asset.path)}>
+              <ExternalLink className="h-4 w-4" />
+              外部播放器
+            </Button>
           </div>
-        )
+        </div>
       ) : currentImg ? (
         <Thumbnail
           path={currentImg}
@@ -993,9 +1009,19 @@ function AssetDetail({
           <video
             src={assetUrl(asset.path)}
             controls
+            controlsList="nofullscreen"
             className="h-full w-full object-contain"
             onClick={(e) => e.stopPropagation()}
           />
+          <Button
+            size="sm"
+            variant="ghost"
+            className="absolute right-3 top-3 z-10 text-white"
+            onClick={() => setFullscreen(false)}
+          >
+            <X className="h-4 w-4" />
+            退出全屏
+          </Button>
         </div>
       )}
     </div>

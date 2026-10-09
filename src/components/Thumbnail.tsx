@@ -89,6 +89,86 @@ export function Thumbnail({
   return <img src={src} alt={alt} className={className} onClick={onClick} draggable={false} />
 }
 
+// 视频首帧缩略图：隐藏 video + canvas 取帧，前端缓存；失败回退深色占位
+const videoThumbCache = new Map<string, string>()
+
+export function VideoThumbnail({ path, className }: { path: string; className?: string }) {
+  const [src, setSrc] = useState<string | null>(() => videoThumbCache.get(path) ?? null)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    const hit = videoThumbCache.get(path)
+    if (hit) {
+      setSrc(hit)
+      return
+    }
+
+    const video = document.createElement("video")
+    video.muted = true
+    video.playsInline = true
+    video.preload = "auto"
+    video.crossOrigin = "anonymous"
+    video.src = assetUrl(path)
+
+    const capture = (): string | null => {
+      try {
+        const w = video.videoWidth || 320
+        const h = video.videoHeight || 180
+        const canvas = document.createElement("canvas")
+        canvas.width = w
+        canvas.height = h
+        const ctx = canvas.getContext("2d")
+        if (!ctx) return null
+        ctx.drawImage(video, 0, 0, w, h)
+        return canvas.toDataURL("image/jpeg", 0.7)
+      } catch {
+        return null
+      }
+    }
+
+    const apply = (url: string | null) => {
+      if (cancelled) return
+      if (url) {
+        videoThumbCache.set(path, url)
+        setSrc(url)
+      } else {
+        setFailed(true)
+      }
+    }
+
+    video.onloadeddata = () => {
+      if (video.duration > 0.1) {
+        video.currentTime = 0.1
+      } else {
+        apply(capture())
+        video.remove()
+      }
+    }
+    video.onseeked = () => {
+      apply(capture())
+      video.remove()
+    }
+    video.onerror = () => {
+      if (!cancelled) setFailed(true)
+      video.remove()
+    }
+
+    return () => {
+      cancelled = true
+      video.remove()
+    }
+  }, [path])
+
+  if (src) {
+    return <img src={src} className={cn("object-cover", className)} />
+  }
+  if (failed) {
+    return <div className={cn("bg-gradient-to-br from-slate-600 to-slate-800", className)} />
+  }
+  return <div className={cn("animate-pulse bg-muted", className)} />
+}
+
 // 文件关联图标（exe 等非图片文件）：后端提取系统图标，前端缓存
 const iconCache = new Map<string, string>()
 
