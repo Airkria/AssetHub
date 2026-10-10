@@ -1,0 +1,19 @@
+[package]
+name = "asset3d-core"
+version = "0.1.0"
+edition = "2021"
+description = "3D 资产转换核心（可复用模块）：assimp 导入 → 元数据 / glTF"
+license = "MIT"
+
+[lib]
+name = "asset3d_core"
+path = "src/lib.rs"
+
+[[bin]]
+name = "asset3d-cli"
+path = "src/main.rs"
+
+[dependencies]
+russimp-ng = { version = "3.2", features = ["static-link"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

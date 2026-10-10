@@ -49,3 +49,5 @@ export interface Asset {
   description: string
   link: string
 }
+
+export type FilterMode = "folder" | "tag"

@@ -2,7 +2,6 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type DragEvent as ReactDragEvent,
   type MouseEvent as ReactMouseEvent,
@@ -11,35 +10,27 @@ import {
 } from "react"
 import {
   Search,
-  FolderOpen,
   ExternalLink,
-  Play,
-  Maximize,
   CheckSquare,
   Check,
-  ChevronDown,
-  ChevronRight,
-  Folder,
-  PenLine,
-  X,
 } from "lucide-react"
 import { ModuleHeader } from "@/components/layout/module-header"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { VirtualGrid } from "@/components/VirtualGrid"
-import { Thumbnail, FullImage, FileIcon, VideoThumbnail } from "@/components/Thumbnail"
+import { Thumbnail, FileIcon, VideoThumbnail } from "@/components/Thumbnail"
+import { AssetDetail, formatSize } from "@/components/AssetDetail"
+import { FilterSidebar } from "@/components/FilterSidebar"
 import { ContextMenu } from "@/components/ContextMenu"
 import { Card } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
-import { TagEditor } from "@/components/TagEditor"
 import { useLibrary } from "@/store/LibraryContext"
-import { api, askConfirm, assetUrl } from "@/api"
+import { api, askConfirm } from "@/api"
 import { IMAGE_EXTS, VIDEO_EXTS } from "@/lib/formats"
 import { cn } from "@/lib/utils"
 import { useThumbSize } from "@/hooks/useThumbSize"
 import { readBoardUi, writeBoardUi, useBoardUiValue, useScrollMemory, useScrollSave } from "@/store/boardUi"
-import type { Asset, BoardConfig } from "@/types"
+import type { Asset, BoardConfig, FilterMode } from "@/types"
 
 const FALLBACKS = [
   "from-slate-600 to-slate-800",
@@ -74,13 +65,16 @@ export function BoardView({ board }: { board: BoardConfig }) {
   const [menu, setMenu] = useState<{ x: number; y: number; mode: "single" | "batch"; asset?: Asset } | null>(null)
   const [tagFilter, setTagFilter] = useState("全部")
   const [folderFilter, setFolderFilter] = useState("")
+  const [filterMode, setFilterMode] = useState<FilterMode>(
+    board.layout === "tree" ? "folder" : "tag",
+  )
   const [selectMode, setSelectMode] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [lastSelectedId, setLastSelectedId] = useState<string | null>(null)
 
   const filtered = useMemo(() => {
     let list = assets
-    if (board.layout === "tree") {
+    if (filterMode === "folder") {
       if (folderFilter) {
         list = list.filter(
           (a) => a.rel_dir === folderFilter || a.rel_dir.startsWith(folderFilter + "/"),
@@ -98,7 +92,7 @@ export function BoardView({ board }: { board: BoardConfig }) {
       )
     }
     return list
-  }, [assets, query, tagFilter, folderFilter, board.layout])
+  }, [assets, query, tagFilter, folderFilter, filterMode])
 
   const current = useMemo(
     () => assets.find((a) => a.id === currentId) ?? null,
@@ -109,7 +103,7 @@ export function BoardView({ board }: { board: BoardConfig }) {
     e.preventDefault()
     const onMove = (ev: MouseEvent) => {
       const w = window.innerWidth - ev.clientX
-      setDetailWidth(Math.min(520, Math.max(220, w)))
+      setDetailWidth(Math.min(Math.round(window.innerWidth * 0.6), Math.max(220, w)))
     }
     const onUp = () => {
       document.removeEventListener("mousemove", onMove)
@@ -230,8 +224,9 @@ export function BoardView({ board }: { board: BoardConfig }) {
       <div className="flex min-h-0 flex-1">
         <FilterSidebar
           boardId={board.id}
-          layout={board.layout}
           assets={assets}
+          filterMode={filterMode}
+          setFilterMode={setFilterMode}
           tagFilter={tagFilter}
           setTagFilter={setTagFilter}
           folderFilter={folderFilter}
@@ -316,7 +311,7 @@ export function BoardView({ board }: { board: BoardConfig }) {
 
         <aside
           style={{ width: detailWidth }}
-          className="shrink-0 border-l bg-card p-4"
+          className="flex min-h-0 shrink-0 flex-col border-l bg-card p-4"
         >
           {selectMode ? (
             <div className="space-y-3">
@@ -379,205 +374,6 @@ export function BoardView({ board }: { board: BoardConfig }) {
 }
 
 // 分类筛选侧栏：树状模式显示文件夹层级树，其他模式显示标签列表；宽度可拖动
-function FilterSidebar({
-  boardId,
-  layout,
-  assets,
-  tagFilter,
-  setTagFilter,
-  folderFilter,
-  setFolderFilter,
-}: {
-  boardId: string
-  layout: string
-  assets: Asset[]
-  tagFilter: string
-  setTagFilter: (t: string) => void
-  folderFilter: string
-  setFolderFilter: (f: string) => void
-}) {
-  const [width, setWidth] = useBoardUiValue(boardId, "sidebarWidth")
-  const asideRef = useRef<HTMLElement | null>(null)
-
-  const startResize = (e: ReactMouseEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    const startX = e.clientX
-    const startW = asideRef.current?.getBoundingClientRect().width ?? 176
-    const onMove = (ev: MouseEvent) => {
-      setWidth(Math.min(360, Math.max(120, startW + (ev.clientX - startX))))
-    }
-    const onUp = () => {
-      document.removeEventListener("mousemove", onMove)
-      document.removeEventListener("mouseup", onUp)
-    }
-    document.addEventListener("mousemove", onMove)
-    document.addEventListener("mouseup", onUp)
-  }
-
-  const tags = useMemo(() => {
-    const s = new Set<string>()
-    for (const a of assets) for (const t of a.tags) s.add(t)
-    return Array.from(s).sort()
-  }, [assets])
-
-  const folderTree = useMemo(() => {
-    const dirs = new Set<string>()
-    for (const a of assets) if (a.rel_dir) dirs.add(a.rel_dir)
-    return buildFolderTree(Array.from(dirs))
-  }, [assets])
-
-  return (
-    <div className="flex shrink-0">
-      <aside
-        ref={asideRef}
-        style={{ width }}
-        className="shrink-0 overflow-y-auto border-r p-2"
-      >
-        {layout === "tree" ? (
-          <div className="space-y-0.5">
-            <button
-              onClick={() => setFolderFilter("")}
-              className={cn(
-                "flex w-full items-center gap-1 rounded-md px-2 py-1.5 text-left text-sm",
-                folderFilter === "" ? "bg-accent text-accent-foreground" : "hover:bg-muted",
-              )}
-            >
-              <Folder className="h-3.5 w-3.5 text-muted-foreground" />
-              <span>全部</span>
-            </button>
-            {folderTree.map((n) => (
-              <FolderTreeNode
-                key={n.path}
-                node={n}
-                depth={0}
-                folderFilter={folderFilter}
-                setFolderFilter={setFolderFilter}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-0.5">
-            <button
-              onClick={() => setTagFilter("全部")}
-              className={cn(
-                "flex w-full items-center rounded-md px-2 py-1.5 text-left text-sm",
-                tagFilter === "全部" ? "bg-accent text-accent-foreground" : "hover:bg-muted",
-              )}
-            >
-              <span>全部</span>
-            </button>
-            {tags.map((t) => (
-              <button
-                key={t}
-                onClick={() => setTagFilter(t)}
-                className={cn(
-                  "flex w-full items-center rounded-md px-2 py-1.5 text-left text-sm",
-                  tagFilter === t ? "bg-accent text-accent-foreground" : "hover:bg-muted",
-                )}
-              >
-                <span className="truncate">{t}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </aside>
-      <div
-        onMouseDown={startResize}
-        className="w-1 shrink-0 cursor-col-resize border-r bg-border hover:bg-primary/50"
-      />
-    </div>
-  )
-}
-
-interface FolderNode {
-  name: string
-  path: string
-  children: FolderNode[]
-}
-
-function buildFolderTree(folders: string[]): FolderNode[] {
-  const root: FolderNode[] = []
-  const map = new Map<string, FolderNode>()
-  for (const f of folders) {
-    const segs = f.split("/").filter(Boolean)
-    let curPath = ""
-    let children = root
-    for (const seg of segs) {
-      curPath = curPath ? `${curPath}/${seg}` : seg
-      let node = map.get(curPath)
-      if (!node) {
-        node = { name: seg, path: curPath, children: [] }
-        map.set(curPath, node)
-        children.push(node)
-      }
-      children = node.children
-    }
-  }
-  const sort = (nodes: FolderNode[]) => {
-    nodes.sort((a, b) => a.name.localeCompare(b.name))
-    for (const n of nodes) sort(n.children)
-  }
-  sort(root)
-  return root
-}
-
-function FolderTreeNode({
-  node,
-  depth,
-  folderFilter,
-  setFolderFilter,
-}: {
-  node: FolderNode
-  depth: number
-  folderFilter: string
-  setFolderFilter: (f: string) => void
-}) {
-  const [expanded, setExpanded] = useState(true)
-  const hasChildren = node.children.length > 0
-  return (
-    <div>
-      <div
-        className={cn(
-          "flex cursor-pointer items-center gap-1 rounded-md py-1 pr-2 text-left text-sm",
-          folderFilter === node.path ? "bg-accent text-accent-foreground" : "hover:bg-muted",
-        )}
-        style={{ paddingLeft: depth * 12 + 4 }}
-        onClick={() => setFolderFilter(node.path)}
-      >
-        {hasChildren ? (
-          <span
-            className="flex h-4 w-4 shrink-0 items-center justify-center"
-            onClick={(e) => {
-              e.stopPropagation()
-              setExpanded(!expanded)
-            }}
-          >
-            {expanded ? (
-              <ChevronDown className="h-3 w-3" />
-            ) : (
-              <ChevronRight className="h-3 w-3" />
-            )}
-          </span>
-        ) : (
-          <span className="h-4 w-4 shrink-0" />
-        )}
-        <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        <span className="truncate">{node.name}</span>
-      </div>
-      {expanded &&
-        hasChildren &&
-        node.children.map((c) => (
-          <FolderTreeNode
-            key={c.path}
-            node={c}
-            depth={depth + 1}
-            folderFilter={folderFilter}
-            setFolderFilter={setFolderFilter}
-          />
-        ))}
-    </div>
-  )
-}
 
 // —— 布局组件（可插拔）：每种布局只负责「怎么排列卡片」 ——
 
@@ -667,7 +463,11 @@ function AssetCard({
       <div className="p-3">
         <div className="truncate text-sm font-medium">{asset.name}</div>
         <div className="mt-1 flex items-center gap-1.5">
-          <Badge variant="outline">{asset.category || "未分类"}</Badge>
+          {asset.category && asset.category !== "未分类" ? (
+            <Badge variant="outline" className="whitespace-nowrap">{asset.category}</Badge>
+          ) : (
+            <Badge variant="outline" className="whitespace-nowrap border-transparent bg-muted font-normal text-muted-foreground">未分类</Badge>
+          )}
           <span className="text-xs text-muted-foreground">{asset.ext}</span>
         </div>
       </div>
@@ -912,159 +712,3 @@ function LayoutRenderer({ layout, ...props }: LayoutProps & { layout: string }):
   }
 }
 
-function AssetDetail({
-  asset,
-  onUpdate,
-  onRename,
-}: {
-  asset: Asset
-  onUpdate: (id: string, patch: { tags?: string[] }) => Promise<void>
-  onRename: (asset: Asset) => void
-}) {
-  const [imgIdx, setImgIdx] = useState(0)
-  const [zoomed, setZoomed] = useState(false)
-  const [playing, setPlaying] = useState(false)
-  const [fullscreen, setFullscreen] = useState(false)
-  const isVideo = VIDEO_EXTS.has(asset.ext)
-  const previews = asset.preview_paths
-  const idx = Math.min(imgIdx, Math.max(0, previews.length - 1))
-  const currentImg = previews[idx] ?? (IMAGE_EXTS.has(asset.ext) ? asset.path : null)
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold">资产详情</span>
-        <Button size="sm" variant="ghost" onClick={() => onRename(asset)}>
-          <PenLine className="h-4 w-4" />
-          重命名
-        </Button>
-      </div>
-      {isVideo ? (
-        <div className="space-y-2">
-          {playing && (
-            <video
-              src={assetUrl(asset.path)}
-              controls
-              controlsList="nofullscreen"
-              className="max-h-80 w-full rounded-lg bg-black"
-            />
-          )}
-          <div className="flex items-center gap-2">
-            <Button size="sm" onClick={() => setPlaying((p) => !p)}>
-              <Play className="h-4 w-4" />
-              {playing ? "收起" : "播放"}
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => setFullscreen(true)}>
-              <Maximize className="h-4 w-4" />
-              全屏
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => api.openUrl(asset.path)}>
-              <ExternalLink className="h-4 w-4" />
-              外部播放器
-            </Button>
-          </div>
-        </div>
-      ) : currentImg ? (
-        <Thumbnail
-          path={currentImg}
-          alt={asset.name}
-          className="max-h-80 w-full cursor-zoom-in rounded-lg object-contain"
-          onClick={() => setZoomed(true)}
-        />
-      ) : (
-        <FileIcon path={asset.path} className="h-40 w-full rounded-lg" />
-      )}
-
-      {previews.length > 1 && (
-        <div className="flex gap-1 overflow-x-auto pb-1">
-          {previews.map((p, i) => (
-            <Thumbnail
-              key={p}
-              path={p}
-              alt={`${asset.name} 预览 ${i + 1}`}
-              onClick={() => setImgIdx(i)}
-              className={cn(
-                "h-12 w-12 shrink-0 cursor-pointer rounded object-cover",
-                i === idx ? "ring-2 ring-ring" : "opacity-60 hover:opacity-100",
-              )}
-            />
-          ))}
-        </div>
-      )}
-
-      <div className="break-all text-base font-semibold">{asset.name}</div>
-      <div className="flex items-center gap-2">
-        <Badge>{asset.category || "未分类"}</Badge>
-        <span className="text-xs text-muted-foreground">{asset.ext}</span>
-      </div>
-      <Separator />
-      <Row label="路径" value={asset.path} />
-      <Row label="大小" value={formatSize(asset.size)} />
-      <div>
-        <div className="mb-1 text-xs text-muted-foreground">标签</div>
-        <TagEditor
-          tags={asset.tags}
-          suggested={[]}
-          onChange={(tags) => onUpdate(asset.id, { tags })}
-        />
-      </div>
-      <Button
-        size="sm"
-        className="w-full"
-        onClick={() => api.revealInFolder(asset.path)}
-      >
-        <FolderOpen className="h-4 w-4" />
-        打开文件位置
-      </Button>
-
-      {zoomed && currentImg && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-8"
-          onClick={() => setZoomed(false)}
-        >
-          <FullImage path={currentImg} alt={asset.name} className="max-h-full max-w-full object-contain" />
-        </div>
-      )}
-
-      {fullscreen && isVideo && (
-        <div
-          className="fixed inset-0 z-50 bg-black"
-          onClick={() => setFullscreen(false)}
-        >
-          <video
-            src={assetUrl(asset.path)}
-            controls
-            controlsList="nofullscreen"
-            className="h-full w-full object-contain"
-            onClick={(e) => e.stopPropagation()}
-          />
-          <Button
-            size="sm"
-            variant="ghost"
-            className="absolute right-3 top-3 z-10 text-white"
-            onClick={() => setFullscreen(false)}
-          >
-            <X className="h-4 w-4" />
-            退出全屏
-          </Button>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between gap-3">
-      <span className="shrink-0 text-muted-foreground">{label}</span>
-      <span className="break-all text-right text-xs">{value}</span>
-    </div>
-  )
-}
-
-function formatSize(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`
-  return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`
-}
