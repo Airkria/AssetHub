@@ -40,6 +40,7 @@ interface LibraryState {
   activeBoardId: string | null
   activeBoard: BoardConfig | null
   assets: Asset[]
+  assetsBoardId: string | null
   scanning: boolean
   paused: boolean
   progress: ScanProgress
@@ -65,6 +66,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
   const [config, setConfigState] = useState<Config>(defaultConfig)
   const [activeBoardId, setActiveBoardId] = useState<string | null>(null)
   const [assets, setAssets] = useState<Asset[]>([])
+  const [assetsBoardId, setAssetsBoardId] = useState<string | null>(null)
   const [scanning, setScanning] = useState(false)
   const [paused, setPaused] = useState(false)
   const [progress, setProgress] = useState<ScanProgress>({
@@ -96,16 +98,25 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       .catch(() => setConfigLoaded(true))
   }, [])
 
-  // 板块切换时加载资产
+  // 板块切换时加载资产（先清空，避免短暂显示上一板块内容，也让滚动恢复在正确数据上触发）
   useEffect(() => {
     if (!isTauri || !activeBoardId) {
       setAssets([])
+      setAssetsBoardId(null)
       return
     }
+    setAssets([])
+    setAssetsBoardId(null)
     api
       .listAssets(activeBoardId)
-      .then(setAssets)
-      .catch(() => setAssets([]))
+      .then((list) => {
+        setAssets(list)
+        setAssetsBoardId(activeBoardId)
+      })
+      .catch(() => {
+        setAssets([])
+        setAssetsBoardId(null)
+      })
   }, [activeBoardId])
 
   // 扫描事件监听（一次注册，通过 ref 取当前板块 id）
@@ -256,6 +267,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
         activeBoardId,
         activeBoard,
         assets,
+        assetsBoardId,
         scanning,
         paused,
         progress,

@@ -8,12 +8,18 @@ export function VirtualGrid({
   renderItem,
   className,
   onWheel,
+  onScroll,
+  scrollRef,
+  initialOffset,
 }: {
   count: number
   cols: number
   renderItem: (index: number) => ReactNode
   className?: string
   onWheel?: (e: ReactWheelEvent<HTMLDivElement>) => void
+  onScroll?: () => void
+  scrollRef?: (el: HTMLDivElement | null) => void
+  initialOffset?: number
 }) {
   const parentRef = useRef<HTMLDivElement>(null)
   const rowCount = Math.ceil(count / cols)
@@ -23,10 +29,19 @@ export function VirtualGrid({
     getScrollElement: () => parentRef.current,
     estimateSize: () => 240,
     overscan: 4,
+    initialOffset,
   })
 
   return (
-    <div ref={parentRef} onWheel={onWheel} className={className}>
+    <div
+      ref={(el) => {
+        parentRef.current = el
+        scrollRef?.(el)
+      }}
+      onWheel={onWheel}
+      onScroll={onScroll}
+      className={className}
+    >
       <div
         style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}
       >

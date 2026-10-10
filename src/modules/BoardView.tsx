@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -37,6 +38,7 @@ import { api, askConfirm, assetUrl } from "@/api"
 import { IMAGE_EXTS, VIDEO_EXTS } from "@/lib/formats"
 import { cn } from "@/lib/utils"
 import { useThumbSize } from "@/hooks/useThumbSize"
+import { readBoardUi, writeBoardUi, useBoardUiValue, useScrollMemory, useScrollSave } from "@/store/boardUi"
 import type { Asset, BoardConfig } from "@/types"
 
 const FALLBACKS = [
@@ -60,11 +62,15 @@ function extractVersion(name: string): string | null {
 }
 
 export function BoardView({ board }: { board: BoardConfig }) {
-  const { assets, updateMetadata, deleteAsset, renameAsset } = useLibrary()
-  const { cols, setCols, onWheel } = useThumbSize(3)
+  const { assets, assetsBoardId, updateMetadata, deleteAsset, renameAsset } = useLibrary()
+  const persistCols = useCallback(
+    (c: number) => writeBoardUi(board.id, "cols", c),
+    [board.id],
+  )
+  const { cols, setCols, onWheel } = useThumbSize(readBoardUi(board.id, "cols"), persistCols)
   const [query, setQuery] = useState("")
   const [currentId, setCurrentId] = useState<string | null>(null)
-  const [detailWidth, setDetailWidth] = useState(288)
+  const [detailWidth, setDetailWidth] = useBoardUiValue(board.id, "detailWidth")
   const [menu, setMenu] = useState<{ x: number; y: number; mode: "single" | "batch"; asset?: Asset } | null>(null)
   const [tagFilter, setTagFilter] = useState("全部")
   const [folderFilter, setFolderFilter] = useState("")
@@ -223,6 +229,7 @@ export function BoardView({ board }: { board: BoardConfig }) {
 
       <div className="flex min-h-0 flex-1">
         <FilterSidebar
+          boardId={board.id}
           layout={board.layout}
           assets={assets}
           tagFilter={tagFilter}
@@ -264,16 +271,18 @@ export function BoardView({ board }: { board: BoardConfig }) {
                 </Button>
               )}
             </div>
-            <input
-              type="range"
-              min={2}
-              max={6}
-              step={1}
-              value={8 - cols}
-              onChange={(e) => setCols(8 - Number(e.target.value))}
-              className="w-24 accent-primary"
-              title="缩略图大小（Ctrl+滚轮也可调整）"
-            />
+            {board.layout !== "detail" && (
+              <input
+                type="range"
+                min={2}
+                max={6}
+                step={1}
+                value={8 - cols}
+                onChange={(e) => setCols(8 - Number(e.target.value))}
+                className="w-24 accent-primary"
+                title="缩略图大小（Ctrl+滚轮也可调整）"
+              />
+            )}
           </div>
           {filtered.length === 0 ? (
             <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
@@ -282,6 +291,8 @@ export function BoardView({ board }: { board: BoardConfig }) {
             </div>
           ) : (
             <LayoutRenderer
+              boardId={board.id}
+              ready={assetsBoardId === board.id}
               layout={board.layout}
               assets={filtered}
               cols={cols}
@@ -369,6 +380,7 @@ export function BoardView({ board }: { board: BoardConfig }) {
 
 // 分类筛选侧栏：树状模式显示文件夹层级树，其他模式显示标签列表；宽度可拖动
 function FilterSidebar({
+  boardId,
   layout,
   assets,
   tagFilter,
@@ -376,6 +388,7 @@ function FilterSidebar({
   folderFilter,
   setFolderFilter,
 }: {
+  boardId: string
   layout: string
   assets: Asset[]
   tagFilter: string
@@ -383,7 +396,7 @@ function FilterSidebar({
   folderFilter: string
   setFolderFilter: (f: string) => void
 }) {
-  const [width, setWidth] = useState(176)
+  const [width, setWidth] = useBoardUiValue(boardId, "sidebarWidth")
   const asideRef = useRef<HTMLElement | null>(null)
 
   const startResize = (e: ReactMouseEvent<HTMLDivElement>) => {
@@ -569,6 +582,8 @@ function FolderTreeNode({
 // —— 布局组件（可插拔）：每种布局只负责「怎么排列卡片」 ——
 
 interface LayoutProps {
+  boardId: string
+  ready: boolean
   assets: Asset[]
   cols: number
   onWheel?: (e: ReactWheelEvent<HTMLDivElement>) => void
@@ -660,13 +675,18 @@ function AssetCard({
   )
 }
 
-function MasonryLayout({ assets, cols, onWheel, currentId, selectMode, selected, anchorId, onCardClick, onMenu, onDrag }: LayoutProps) {
+function MasonryLayout({ boardId, ready, assets, cols, onWheel, currentId, selectMode, selected, anchorId, onCardClick, onMenu, onDrag }: LayoutProps) {
+  const { ref, onScroll } = useScrollSave(boardId, ready)
+  const initialOffset = useMemo(() => readBoardUi(boardId, "scrollTop"), [boardId])
   return (
     <VirtualGrid
       count={assets.length}
       cols={cols}
       className="flex-1 min-w-0 overflow-auto px-6 py-4"
       onWheel={onWheel}
+      onScroll={onScroll}
+      scrollRef={ref}
+      initialOffset={initialOffset}
       renderItem={(i) => {
         const a = assets[i]
         return (
@@ -687,9 +707,12 @@ function MasonryLayout({ assets, cols, onWheel, currentId, selectMode, selected,
   )
 }
 
-function GridLayout({ assets, cols, currentId, selectMode, selected, anchorId, onCardClick, onMenu, onDrag }: LayoutProps) {
+function GridLayout({ boardId, ready, assets, cols, currentId, selectMode, selected, anchorId, onCardClick, onMenu, onDrag }: LayoutProps) {
+  const { ref, onScroll } = useScrollMemory(boardId, ready)
   return (
     <div
+      ref={ref}
+      onScroll={onScroll}
       className="grid flex-1 content-start gap-4 overflow-y-auto p-4"
       style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
     >
@@ -710,7 +733,8 @@ function GridLayout({ assets, cols, currentId, selectMode, selected, anchorId, o
   )
 }
 
-function TreeLayout({ assets, currentId, selectMode, selected, anchorId, onCardClick, onMenu, onDrag }: LayoutProps) {
+function TreeLayout({ boardId, ready, assets, cols, currentId, selectMode, selected, anchorId, onCardClick, onMenu, onDrag }: LayoutProps) {
+  const { ref, onScroll } = useScrollMemory(boardId, ready)
   const groups = useMemo(() => {
     const m = new Map<string, Asset[]>()
     for (const a of assets) {
@@ -722,13 +746,13 @@ function TreeLayout({ assets, currentId, selectMode, selected, anchorId, onCardC
   }, [assets])
 
   return (
-    <div className="flex-1 space-y-5 overflow-y-auto p-4">
+    <div ref={ref} onScroll={onScroll} className="flex-1 space-y-5 overflow-y-auto p-4">
       {groups.map(([dir, items]) => (
         <div key={dir}>
           <div className="mb-2 text-sm font-semibold text-muted-foreground">
             {dir}（{items.length}）
           </div>
-          <div className="grid grid-cols-3 gap-3 md:grid-cols-4">
+          <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
             {items.map((a) => (
               <AssetCard
                 key={a.id}
@@ -749,9 +773,10 @@ function TreeLayout({ assets, currentId, selectMode, selected, anchorId, onCardC
   )
 }
 
-function DetailLayout({ assets, currentId, selectMode, selected, anchorId, onCardClick, onMenu, onDrag, onUpdate }: LayoutProps) {
+function DetailLayout({ boardId, ready, assets, currentId, selectMode, selected, anchorId, onCardClick, onMenu, onDrag, onUpdate }: LayoutProps) {
+  const { ref, onScroll } = useScrollMemory(boardId, ready)
   return (
-    <div className="flex-1 space-y-2 overflow-y-auto p-4">
+    <div ref={ref} onScroll={onScroll} className="flex-1 space-y-2 overflow-y-auto p-4">
       {assets.map((a) => (
         <DetailRow
           key={a.id}
